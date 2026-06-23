@@ -1,0 +1,10 @@
+# Local commit-message enforcement. Conventional Commits are required because
+# release-please parses them to compute the version + changelog.
+# Install once per clone:  uvx pre-commit install --hook-type commit-msg
+default_install_hook_types: [commit-msg]
+repos:
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
