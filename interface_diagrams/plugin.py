@@ -24,6 +24,7 @@ class DiagramsPlugin(BasePlugin):
     )
 
     def on_config(self, config):
+        _hooklogic._reset_caches()
         node = self.config["node_path"] or workers.resolve_node()
         workers.check_node(node)
         self._node = node

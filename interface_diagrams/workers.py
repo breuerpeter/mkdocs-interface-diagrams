@@ -22,7 +22,13 @@ def resolve_node() -> str:
 
 
 def check_node(node: str) -> None:
-    out = subprocess.run([node, "--version"], capture_output=True, text=True)
+    try:
+        out = subprocess.run([node, "--version"], capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"interface-diagrams needs Node >= {MIN_NODE_MAJOR}; "
+            f"'{node}' not found or not executable."
+        )
     ver = out.stdout.strip().lstrip("v")
     major = int(ver.split(".")[0]) if ver else 0
     if major < MIN_NODE_MAJOR:

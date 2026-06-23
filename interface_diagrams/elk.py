@@ -452,6 +452,8 @@ def run_elk(spec: dict) -> dict:
     # patch); fall back to elk._ELK_POOL for callers that inject directly here.
     import interface_diagrams.generate as _gen
     pool = _gen._ELK_POOL if _gen._ELK_POOL is not None else _ELK_POOL
+    if pool is None:
+        raise RuntimeError("elk worker pool not initialized; call generate_section first")
     resp = pool.call(spec)
     if not resp.get("ok"):
         sys.stderr.write(resp.get("error", "elk_layout.mjs failed") + "\n")

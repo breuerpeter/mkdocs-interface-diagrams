@@ -209,6 +209,8 @@ def require_render_toolchain() -> None:
 
 def render_svg(elements: list[dict]) -> str:
     """Render Excalidraw elements to a self-contained SVG via the render worker."""
+    if _RENDER_POOL is None:
+        raise RuntimeError("render worker pool not initialized; call generate_section first")
     resp = _RENDER_POOL.call({"elements": elements})
     if not resp.get("ok"):
         raise RuntimeError(f"render_svg.mjs failed: {resp.get('error', '').strip()}")

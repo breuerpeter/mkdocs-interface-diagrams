@@ -64,6 +64,19 @@ _SYSTEM_SVG = {}  # section -> docs-relative path of its system svg
 _SECTION_STEMS = None
 
 
+def _reset_caches() -> None:
+    """Reset all per-build scan caches.  Call once at the start of each build
+    (plugin.on_config) so that a doc rename during ``mkdocs serve`` is picked up
+    on the next rebuild rather than serving stale placement data."""
+    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS
+    _DIAGRAMS = None
+    _PATHS = None
+    _DOCS = None
+    _TITLES = None
+    _SYSTEM_SVG = {}
+    _SECTION_STEMS = None
+
+
 def _doc_path(name: str, section: str = "") -> str:
     """Resolve a referenced doc — a subsystem name or '<name>.md' — to its real
     docs-relative path, **preferring the given section**: different systems can
