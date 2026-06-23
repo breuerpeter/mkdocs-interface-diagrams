@@ -21,10 +21,9 @@ interface-diagrams = "interface_diagrams.plugin:DiagramsPlugin"
 [dependency-groups]
 dev = ["pytest>=8", "mkdocs>=1.6", "ruff>=0.6"]
 
+[tool.hatch.build.targets.sdist]
+artifacts = ["interface_diagrams/_js/*.bundle.mjs"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["interface_diagrams"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"interface_diagrams/_js" = "interface_diagrams/_js"
-"interface_diagrams/_fonts" = "interface_diagrams/_fonts"
-"interface_diagrams/_assets" = "interface_diagrams/_assets"
+artifacts = ["interface_diagrams/_js/*.bundle.mjs"]
