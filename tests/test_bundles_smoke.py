@@ -36,4 +36,6 @@ def test_elk_bundle_lays_out_a_spec():
 def test_render_bundle_emits_svg():
     elements = json.loads((FIX / "excalidraw_elements.json").read_text())
     out = _run("render_svg.bundle.mjs", elements)
-    assert "<svg" in out
+    payload = json.loads(out.splitlines()[-1])
+    assert payload.get("ok") is True
+    assert "<svg" in payload["svg"]

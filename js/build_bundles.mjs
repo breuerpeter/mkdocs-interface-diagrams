@@ -41,7 +41,10 @@ await build({
     js: `import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const _origResolve = require.resolve.bind(require);
-require.resolve = (id, opts) => { try { return _origResolve(id, opts); } catch { return null; } };`,
+require.resolve = (id, opts) => {
+  if (typeof id === 'string' && id.includes('xhr-sync-worker')) return null;
+  return _origResolve(id, opts);
+};`,
   },
   logLevel: 'info',
 });
