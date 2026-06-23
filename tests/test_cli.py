@@ -8,8 +8,16 @@ from interface_diagrams.cli import main
 FIX = Path(__file__).resolve().parent / "fixtures" / "parity"
 
 
-def test_check_subcommand_validates_without_writing(tmp_path, capsys):
+def test_check_subcommand_validates_without_writing(capsys):
     rc = main(["check", str(FIX)])
+    assert rc == 0
+
+
+def test_generate_section_resets_validation_counters():
+    from interface_diagrams import generate
+    generate._VALIDATION_WARNINGS = 5
+    generate._VALIDATION_SOFT_WARNINGS = 3
+    rc = generate.generate_section(FIX, FIX / "unused", check=True)
     assert rc == 0
 
 

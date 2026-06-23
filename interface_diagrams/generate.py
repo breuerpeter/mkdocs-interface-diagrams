@@ -2375,6 +2375,9 @@ def planned_stems(doc_paths: list[Path]) -> set[str]:
 
 def generate_section(section: Path, out: Path, check: bool = False) -> int:
     """Generate (or, with check=True, only validate) one system folder. Returns exit code."""
+    global _VALIDATION_WARNINGS, _VALIDATION_SOFT_WARNINGS
+    _VALIDATION_WARNINGS = 0
+    _VALIDATION_SOFT_WARNINGS = 0
     if not section.is_dir():
         print(f"error: {section} is not a folder", file=sys.stderr)
         return 2
