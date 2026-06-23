@@ -1,0 +1,133 @@
+.interface-diagram {
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+.interface-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Device / component / interface / path diagrams are linked, not inlined. The
+   hook wraps each title's text in the diagram link, so clicking the title opens
+   its diagram in the lightbox — no per-title button or icon clutter. The link
+   looks exactly like its title at rest (inherits color/weight/case); on hover it
+   highlights to signal it's clickable. */
+.md-typeset a.diagram-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.md-typeset a.diagram-link:hover {
+  color: var(--md-primary-fg-color);
+}
+
+/* The interface nesting goes h4 (device-interface / component) > h5 (interface)
+   > h6 (payload base), but Material compresses these: h4 is just body size and
+   h5/h6 are tiny faint grey, so adjacent levels blur. Give each a distinct cue:
+   h4 a hairline section divider, h5 an uppercase header, h6 a lighter sub-header
+   — all un-muted and comfortably sized.
+
+   Scoped to interface-doc pages (those that contain a diagram link) so normal
+   prose pages keep Material's default heading styles. */
+.md-typeset:has(a.diagram-link) :is(h5, h6) {
+  color: var(--md-default-fg-color);
+}
+.md-typeset:has(a.diagram-link) h4 {
+  font-size: 1.15em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.15em;
+}
+.md-typeset:has(a.diagram-link) h5 {
+  font-size: 1em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.md-typeset:has(a.diagram-link) h6 {
+  font-size: 1em;
+  font-weight: 500;
+  text-transform: none;
+}
+
+/* A flow's label is the bold paragraph that carries the inline diagram icon
+   (the hook collapses each flow's diagram onto its label line). Same size as its
+   payload-base heading, but not bold and muted, so the (solid) heading above
+   stays dominant. Targeted purely by structure (no class, nothing added to the
+   markdown); inline bold in prose never carries a diagram link, so it's safe. */
+.md-typeset p:has(> a.diagram-link) {
+  font-size: 1em;
+}
+.md-typeset p:has(> a.diagram-link) strong {
+  font-weight: 400;
+  color: var(--md-default-fg-color--light);
+}
+.md-typeset p:has(> a.diagram-link) a.diagram-link:hover strong {
+  color: var(--md-primary-fg-color);
+}
+
+/* The diagrams bake a light palette (light fills, dark text) with a
+   transparent background. In dark mode, invert luminance and rotate hue back
+   so they read as a coherent dark theme (light text on dark fills) while the
+   transparent areas blend into the dark page. */
+[data-md-color-scheme="slate"] .interface-diagram svg {
+  filter: invert(0.92) hue-rotate(180deg);
+}
+
+/* Small labels (port + edge) carry a readability halo (render_svg.mjs) so they
+   stay legible where an edge crosses them. The halo colour comes from
+   --diagram-halo: white in light mode (matches the white canvas). In dark mode
+   the SVG is luminance-inverted, so a white halo would show as a near-black
+   fringe on the slate page — instead use the pre-image of the page background
+   under the invert(0.92) hue-rotate(180) filter, so the halo lands back on the
+   slate background and stays invisible. Set on the scheme root so both the
+   inline diagrams and the lightbox copy inherit it. */
+[data-md-color-scheme="slate"] {
+  --diagram-halo: #eff1fc;
+}
+
+/* Click an inlined diagram to expand it to a full-viewport overlay. */
+.interface-diagram svg { cursor: zoom-in; }
+.interface-diagram a { cursor: pointer; }   /* links keep the normal cursor */
+.diagram-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: var(--md-default-bg-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 2vmin;
+  cursor: zoom-out;
+}
+.diagram-lightbox > svg {
+  max-width: 96vw;
+  max-height: 92vh;
+  height: auto;
+  cursor: default;
+}
+[data-md-color-scheme="slate"] .diagram-lightbox > svg {
+  filter: invert(0.92) hue-rotate(180deg);
+}
+/* Overlay controls (home, download), pinned to the top-right. */
+.diagram-toolbar {
+  position: fixed;
+  top: 2vmin;
+  right: 2vmin;
+  display: flex;
+  gap: 0.4rem;
+}
+.diagram-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  border-radius: 0.2rem;
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+  line-height: 0;
+}
+.diagram-tool:hover {
+  color: var(--md-primary-fg-color);
+  border-color: var(--md-primary-fg-color);
+}
