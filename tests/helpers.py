@@ -15,6 +15,7 @@ import interface_diagrams.generate  # noqa: F401  (ensures import works)
 SCRIPTS = None  # retained name; tests that referenced files under SCRIPTS use fixtures now
 
 from interface_diagrams import generate  # noqa: E402
+from interface_diagrams import edges as _edges  # noqa: E402
 from interface_diagrams.generate import (  # noqa: E402
     Component,
     Device,
@@ -70,19 +71,19 @@ class PipelineTestCase(unittest.TestCase):
     warning DELTAS without polluting each other or the test output."""
 
     def setUp(self):
-        generate._VALIDATION_WARNINGS = 0
-        generate._VALIDATION_SOFT_WARNINGS = 0
+        _edges._VALIDATION_WARNINGS = 0
+        _edges._VALIDATION_SOFT_WARNINGS = 0
         self._stderr = contextlib.redirect_stderr(io.StringIO())
         self._stderr.__enter__()
         self.addCleanup(self._stderr.__exit__, None, None, None)
 
     @property
     def warnings(self) -> int:
-        return generate._VALIDATION_WARNINGS
+        return _edges._VALIDATION_WARNINGS
 
     @property
     def soft_warnings(self) -> int:
-        return generate._VALIDATION_SOFT_WARNINGS
+        return _edges._VALIDATION_SOFT_WARNINGS
 
     @property
     def stderr_text(self) -> str:
