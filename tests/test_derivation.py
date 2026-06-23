@@ -5,9 +5,6 @@ the convention (generate.planned_stems vs hooks._walk) against drift.
 
 Pure Python — no node, no rendering — so it runs in CI's unit-test step."""
 
-import pytest
-pytest.importorskip("interface_diagrams.plugin")  # Task 6 ports the plugin; skip until then
-
 import importlib.util
 import sys
 import unittest
@@ -15,10 +12,16 @@ from pathlib import Path
 
 HAVE_MARKDOWN = importlib.util.find_spec("markdown") is not None
 
-from interface_diagrams import generate  # noqa: E402
-from interface_diagrams import manifest  # noqa: E402
+from interface_diagrams import generate
+from interface_diagrams import manifest
 
-from interface_diagrams import plugin as hooks  # noqa: E402
+from interface_diagrams import _hooklogic as hooks
+
+# DriftGuardRealDocs runs against a docs/drone-system tree; when testing from
+# the standalone package (no newton repo checked out alongside), skip gracefully.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+_REAL_DOCS = REPO_ROOT / "docs" / "drone-system"
+HAVE_REAL_DOCS = _REAL_DOCS.is_dir()
 
 # One subsystem doc exercising every diagram-bearing location.
 DOC = """\
@@ -92,7 +95,7 @@ class Derivation(unittest.TestCase):
         self.assertNotIn("SBus", self.slugs)
 
 
-@unittest.skipUnless(HAVE_MARKDOWN, "markdown package not installed")
+@unittest.skipUnless(HAVE_MARKDOWN and HAVE_REAL_DOCS, "markdown package or real docs not available")
 class DriftGuardRealDocs(unittest.TestCase):
     """Every diagram the generator could name for the real docs must be
     placeable by the hook's derivation. A divergence (renamed qualifier, a
@@ -100,7 +103,7 @@ class DriftGuardRealDocs(unittest.TestCase):
     hook can't place) is caught at build time by hooks._scan's orphan check."""
 
     def test_planned_stems_are_all_hook_derivable(self):
-        section = REPO_ROOT / "docs" / "drone-system"
+        section = _REAL_DOCS
         _name, doc_paths = manifest.parse_section(section)
         planned = generate.planned_stems(doc_paths)
 

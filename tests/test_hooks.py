@@ -5,9 +5,6 @@ standalone-SVG link rewriting.
 Needs the docs venv (`markdown` for _scan, `mkdocs` for the rewrites); skipped
 where those aren't installed. CI runs the suite via `uv run`, where they are."""
 
-import pytest
-pytest.importorskip("interface_diagrams.plugin")  # Task 6 ports the plugin; skip until then
-
 import importlib.util
 import os
 import sys
@@ -18,7 +15,7 @@ from pathlib import Path
 HAVE_MARKDOWN = importlib.util.find_spec("markdown") is not None
 HAVE_MKDOCS = importlib.util.find_spec("mkdocs") is not None
 
-from interface_diagrams import plugin as hooks  # noqa: E402
+from interface_diagrams import _hooklogic as hooks
 
 SUB_DOC = """\
 # Sub A
@@ -234,7 +231,7 @@ class PageTransform(unittest.TestCase):
         _reset()
         page = _Page(files.get_file_from_path(src_path))
         md = (docs / src_path).read_text(encoding="utf-8")
-        return hooks.on_page_markdown(md, page, {"docs_dir": str(docs)}, files)
+        return hooks.apply_page_markdown(md, page, {"docs_dir": str(docs)}, files)
 
     def test_landing_page_inlines_the_system_overview(self):
         out = self.render("drone-system/index.md", ["drone_system"])
