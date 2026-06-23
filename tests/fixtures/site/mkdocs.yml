@@ -1,0 +1,4 @@
+site_name: Interface Diagrams Test Site
+docs_dir: docs
+plugins:
+  - interface-diagrams

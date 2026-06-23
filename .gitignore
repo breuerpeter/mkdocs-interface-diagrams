@@ -6,3 +6,4 @@ interface_diagrams/_js/*.bundle.mjs
 js/package-lock.json.bak
 dist/
 .interface-diagrams-cache.json
+tests/fixtures/site/docs/assets/
