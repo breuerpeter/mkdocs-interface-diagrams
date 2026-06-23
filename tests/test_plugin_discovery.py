@@ -18,5 +18,6 @@ def test_on_config_discovers_systems_and_injects_assets(monkeypatch):
     p.on_config(cfg)
     names = {s for _, _, s in p._jobs}
     assert "Parity Demo" in names
-    assert any("diagram-lightbox.js" in j for j in cfg["extra_javascript"])
-    assert any("diagram.css" in css for css in cfg["extra_css"])
+    assert "assets/diagrams/_assets/diagram-lightbox.js" in cfg["extra_javascript"]
+    assert "assets/diagrams/_assets/diagram.css" in cfg["extra_css"]
+    assert len(p._jobs) == 1

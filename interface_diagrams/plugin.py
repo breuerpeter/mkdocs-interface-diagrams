@@ -54,7 +54,7 @@ class DiagramsPlugin(BasePlugin):
         for _section, out_dir, _name in getattr(self, "_jobs", []):
             for svg in out_dir.glob("*.svg"):
                 rel = svg.relative_to(Path(config["docs_dir"]))
-                files.append(File.generated(config, str(rel), abs_src_path=str(svg)))
+                files.append(File.generated(config, rel.as_posix(), abs_src_path=str(svg)))
         return files
 
     def on_page_markdown(self, markdown, page, config, files):
