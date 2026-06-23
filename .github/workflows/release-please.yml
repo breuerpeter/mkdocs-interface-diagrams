@@ -1,0 +1,44 @@
+name: release-please
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # When release-please cuts a release, build the vendored bundles + wheel and
+  # attach it to the GitHub release. The tag-triggered workflow approach does NOT
+  # work with release-please (tags it pushes via GITHUB_TOKEN don't trigger
+  # `on: push: tags`), so the build is gated on release_created here instead.
+  publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - uses: astral-sh/setup-uv@v5
+      - run: cd js && npm ci && node build_bundles.mjs
+      - run: rm -rf js/node_modules            # prove bundles are self-contained
+      - run: uv run pytest tests -q
+      - run: uv build
+      - run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
