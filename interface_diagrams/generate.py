@@ -51,8 +51,6 @@ from interface_diagrams.parse import FLOW_ITEM_RE, BOLD_RE, parse_wikilink, pars
 
 
 from interface_diagrams.edges import (
-    _VALIDATION_WARNINGS,
-    _VALIDATION_SOFT_WARNINGS,
     _warn,
     _soft_warn,
     merge_labels,

@@ -48,8 +48,9 @@ def write_section(td: str, docs: dict) -> Path:
 
 
 def run_check(section: Path) -> tuple[int, str]:
-    generate._VALIDATION_WARNINGS = 0
-    generate._VALIDATION_SOFT_WARNINGS = 0
+    import interface_diagrams.edges as _edges_mod
+    _edges_mod._VALIDATION_WARNINGS = 0
+    _edges_mod._VALIDATION_SOFT_WARNINGS = 0
     err = io.StringIO()
     with contextlib.redirect_stderr(err):
         code = generate.main([str(section), "--check"])
