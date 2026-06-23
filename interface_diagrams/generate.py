@@ -1251,9 +1251,6 @@ def _all_port_ids(children) -> set[str]:
     return ids
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-
-
 class _Worker:
     """One long-lived `node <script>` process speaking line-delimited JSON:
     write one request line, read one response line. Importing elkjs / the
@@ -1320,25 +1317,10 @@ _RENDER_POOL: WorkerPool | None = None
 def require_render_toolchain() -> None:
     """Fail fast, with the fix, when the node side isn't ready. Rendering needs
     node 20+. Validation (--check) never calls this — it needs no node at all."""
-    import shutil
-
-    node = os.environ.get("INTERFACE_DIAGRAMS_NODE") or shutil.which("node")
-    if node is None:
-        raise SystemExit(
-            "error: node not found — install node 20+ (see .nvmrc) or set "
-            "INTERFACE_DIAGRAMS_NODE to the node binary path."
-        )
     try:
-        import subprocess as _sp
-        out = _sp.run([node, "--version"], capture_output=True, text=True)
-        ver = out.stdout.strip().lstrip("v")
-        major = int(ver.split(".")[0]) if ver else 0
-    except Exception:
-        major = 0
-    if major < 20:
-        raise SystemExit(
-            f"error: interface-diagrams needs node 20+; found {ver or 'unknown'}."
-        )
+        _workers.check_node(_workers.resolve_node())
+    except RuntimeError as e:
+        raise SystemExit(f"error: {e}")
     elk_bundle = _workers.bundle_path("elk_layout.bundle.mjs")
     render_bundle = _workers.bundle_path("render_svg.bundle.mjs")
     if not elk_bundle.is_file() or not render_bundle.is_file():
@@ -2362,14 +2344,6 @@ def build_excalidraw(
 # ---------------------------------------------------------------------------
 
 
-# This repo has exactly one diagrammed section; both paths default to it
-# (resolved from this file, so the no-argument invocation works from any cwd).
-# They stay overridable for the test fixtures.
-REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_SECTION = REPO_ROOT / "docs" / "drone-system"
-DEFAULT_OUT = REPO_ROOT / "docs" / "assets" / "diagrams" / "drone-system"
-
-
 def planned_stems(doc_paths: list[Path]) -> set[str]:
     """Every diagram stem the generator could emit for these docs — the naming
     contract, expressed without rendering or the flow-touch filter (so it needs
@@ -2404,25 +2378,24 @@ def main(argv):
     ap.add_argument(
         "section",
         type=Path,
-        nargs="?",
-        default=DEFAULT_SECTION,
         help=(
             "the data-flows FOLDER: every '<name>.md' in it is a subsystem interface "
-            "doc, except 'index.md' (the landing page that hosts the system diagram) "
-            "(default: docs/drone-system)"
+            "doc, except 'index.md' (the landing page that hosts the system diagram)"
         ),
     )
     ap.add_argument(
         "--out",
         type=Path,
-        default=DEFAULT_OUT,
+        required=False,
         help=(
             "output DIRECTORY for the SVGs; embeds reference it relative to the "
-            "section's docs (default: docs/assets/diagrams/drone-system)"
+            "section's docs (required unless --check is given)"
         ),
     )
     ap.add_argument("--check", action="store_true", help=("parse and validate only, write no diagrams"))
     args = ap.parse_args(argv)
+    if not args.check and args.out is None:
+        ap.error("--out is required when not using --check")
     if not args.section.is_dir():
         print(f"error: {args.section} is not a folder", file=sys.stderr)
         return 2

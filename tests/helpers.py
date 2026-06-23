@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import contextlib
 import io
-import sys  # noqa: F401
 import unittest
 
 import interface_diagrams.generate  # noqa: F401  (ensures import works)

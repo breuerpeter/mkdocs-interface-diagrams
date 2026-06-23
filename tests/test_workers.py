@@ -116,6 +116,17 @@ class RequireRenderToolchain(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "node"):
                     generate.require_render_toolchain()
 
+    def test_missing_bundles_names_bundles(self):
+        from pathlib import Path
+        from unittest.mock import patch
+
+        nonexistent = Path("/nonexistent/elk_layout.bundle.mjs")
+        with patch("interface_diagrams.generate._workers.resolve_node", return_value="/fake/node"):
+            with patch("interface_diagrams.generate._workers.check_node", return_value=None):
+                with patch("interface_diagrams.generate._workers.bundle_path", return_value=nonexistent):
+                    with self.assertRaisesRegex(SystemExit, "bundle"):
+                        generate.require_render_toolchain()
+
     @unittest.skipUnless(HAVE_NODE, "node not installed")
     def test_ready_toolchain_passes(self):
         generate.require_render_toolchain()  # must not raise
