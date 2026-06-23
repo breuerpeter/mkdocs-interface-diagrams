@@ -2373,39 +2373,18 @@ def planned_stems(doc_paths: list[Path]) -> set[str]:
     return stems
 
 
-def main(argv):
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "section",
-        type=Path,
-        help=(
-            "the data-flows FOLDER: every '<name>.md' in it is a subsystem interface "
-            "doc, except 'index.md' (the landing page that hosts the system diagram)"
-        ),
-    )
-    ap.add_argument(
-        "--out",
-        type=Path,
-        required=False,
-        help=(
-            "output DIRECTORY for the SVGs; embeds reference it relative to the "
-            "section's docs (required unless --check is given)"
-        ),
-    )
-    ap.add_argument("--check", action="store_true", help=("parse and validate only, write no diagrams"))
-    args = ap.parse_args(argv)
-    if not args.check and args.out is None:
-        ap.error("--out is required when not using --check")
-    if not args.section.is_dir():
-        print(f"error: {args.section} is not a folder", file=sys.stderr)
+def generate_section(section: Path, out: Path, check: bool = False) -> int:
+    """Generate (or, with check=True, only validate) one system folder. Returns exit code."""
+    if not section.is_dir():
+        print(f"error: {section} is not a folder", file=sys.stderr)
         return 2
 
-    system_name, doc_paths = manifest.parse_section(args.section)
+    system_name, doc_paths = manifest.parse_section(section)
     if not doc_paths:
-        print(f"error: no subsystem docs found in {args.section}", file=sys.stderr)
+        print(f"error: no subsystem docs found in {section}", file=sys.stderr)
         return 2
-    overview = args.section / "index.md"
-    if not args.check and not overview.is_file():
+    overview = section / "index.md"
+    if not check and not overview.is_file():
         print(
             f"error: {overview} not found — the section needs an index.md landing page for the system diagram",
             file=sys.stderr,
@@ -2415,7 +2394,7 @@ def main(argv):
     full, flows, parsed_docs, unresolved = parse_closure(doc_paths)
     all_subs = sorted({d.subsystem for d in full.devices})
 
-    if args.check:
+    if check:
         derive_edges(flows, full)
         if _VALIDATION_WARNINGS:
             print(
@@ -2435,7 +2414,7 @@ def main(argv):
     # --out is the exact output directory for the SVGs (e.g.
     # docs/assets/diagrams/drone-system). hooks.py derives each diagram's
     # docs-relative path from this layout (assets/diagrams/<section>/<stem>.svg).
-    out_dir: Path = args.out
+    out_dir: Path = out
     if out_dir.exists():
         for old in out_dir.glob("*.svg"):
             old.unlink()
@@ -2661,6 +2640,32 @@ def main(argv):
         _RENDER_POOL.close()
 
     return 0
+
+
+def main(argv):
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "section",
+        type=Path,
+        help=(
+            "the data-flows FOLDER: every '<name>.md' in it is a subsystem interface "
+            "doc, except 'index.md' (the landing page that hosts the system diagram)"
+        ),
+    )
+    ap.add_argument(
+        "--out",
+        type=Path,
+        required=False,
+        help=(
+            "output DIRECTORY for the SVGs; embeds reference it relative to the "
+            "section's docs (required unless --check is given)"
+        ),
+    )
+    ap.add_argument("--check", action="store_true", help=("parse and validate only, write no diagrams"))
+    args = ap.parse_args(argv)
+    if not args.check and args.out is None:
+        ap.error("--out is required when not using --check")
+    return generate_section(args.section, args.out, args.check)
 
 
 if __name__ == "__main__":
