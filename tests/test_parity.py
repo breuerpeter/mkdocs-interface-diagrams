@@ -27,7 +27,9 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not o
 
 # Excalidraw seeds roughjs strokes; if seeds are not pinned, normalise them out
 # before comparing so the gate asserts structural+geometric equality, not noise.
-_SEED = re.compile(r'(seed|versionNonce|"id":")[^",]+')
+# Tightened to require attribute delimiters: word boundaries for seed/versionNonce,
+# quote-delimited for "id" values. Prevents spurious matches on structural SVG content.
+_SEED = re.compile(r'\b(seed|versionNonce)=[0-9]+|("id":")[^",]+')
 
 
 def _norm(svg: str) -> str:
