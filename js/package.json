@@ -1,0 +1,22 @@
+{
+    "name": "interface-diagrams-elk",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "elkjs + excalidraw-svg helpers used by generate.py.",
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "build": "node build_bundles.mjs"
+    },
+    "dependencies": {
+        "elkjs": "^0.9.3",
+        "@excalidraw/excalidraw": "^0.18.1",
+        "jsdom": "^24.0.0",
+        "fontkit": "^2.0.0"
+    },
+    "devDependencies": {
+        "esbuild": "^0.21.0"
+    }
+}

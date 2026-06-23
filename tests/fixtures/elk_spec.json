@@ -1,0 +1,274 @@
+{
+  "id": "root",
+  "layoutOptions": {
+    "elk.algorithm": "layered",
+    "elk.direction": "RIGHT",
+    "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+    "elk.spacing.nodeNode": "50",
+    "elk.layered.spacing.nodeNodeBetweenLayers": "10",
+    "elk.padding": "[top=20,left=20,bottom=20,right=20]",
+    "elk.edgeRouting": "ORTHOGONAL",
+    "elk.layered.mergeEdges": "true",
+    "elk.spacing.edgeLabel": "8"
+  },
+  "children": [
+    {
+      "id": "sub__SubA",
+      "labels": [
+        {
+          "text": "SubA",
+          "width": 44,
+          "height": 22
+        }
+      ],
+      "layoutOptions": {
+        "elk.padding": "[top=40,left=16,bottom=16,right=16]",
+        "elk.spacing.nodeNode": "40",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "10",
+        "elk.nodeLabels.placement": "OUTSIDE V_TOP H_LEFT",
+        "elk.spacing.edgeLabel": "8",
+        "elk.nodeSize.constraints": "MINIMUM_SIZE",
+        "elk.nodeSize.minimum": "(76, 0)",
+        "elk.spacing.portPort": "11",
+        "elk.spacing.portsSurrounding": "[top=15,left=10,bottom=10,right=10]"
+      },
+      "children": [
+        {
+          "id": "dev__SubA__DevA",
+          "labels": [
+            {
+              "text": "DevA",
+              "width": 39,
+              "height": 18
+            }
+          ],
+          "layoutOptions": {
+            "elk.portConstraints": "FREE",
+            "elk.portLabels.placement": "OUTSIDE ALWAYS_SAME_SIDE",
+            "elk.portLabels.nextToPortIfPossible": "true",
+            "elk.nodeSize.constraints": "NODE_LABELS",
+            "elk.nodeSize.options": "ASYMMETRICAL",
+            "elk.nodeLabels.placement": "OUTSIDE V_TOP H_LEFT",
+            "elk.padding": "[top=28,left=8,bottom=8,right=8]",
+            "elk.spacing.nodeNode": "30",
+            "elk.spacing.portPort": "11",
+            "elk.spacing.portsSurrounding": "[top=15,left=10,bottom=10,right=10]",
+            "elk.spacing.edgeLabel": "8",
+            "elk.hierarchyHandling": "SEPARATE_CHILDREN"
+          },
+          "ports": [
+            {
+              "id": "port__SubA__DevA___eth0",
+              "labels": [
+                {
+                  "text": "eth0",
+                  "width": 27,
+                  "height": 14
+                }
+              ],
+              "width": 8,
+              "height": 8
+            }
+          ],
+          "children": [
+            {
+              "id": "comp__SubA__DevA__proc",
+              "labels": [
+                {
+                  "text": "proc",
+                  "width": 28,
+                  "height": 16
+                }
+              ],
+              "layoutOptions": {
+                "elk.portConstraints": "FREE",
+                "elk.portLabels.placement": "OUTSIDE ALWAYS_SAME_SIDE",
+                "elk.portLabels.nextToPortIfPossible": "true",
+                "elk.nodeSize.constraints": "NODE_LABELS PORTS PORT_LABELS",
+                "elk.nodeSize.options": "ASYMMETRICAL",
+                "elk.nodeLabels.placement": "INSIDE V_TOP H_LEFT",
+                "elk.spacing.labelPort": "8"
+              },
+              "ports": [
+                {
+                  "id": "port__SubA__DevA___proc___udp_1",
+                  "labels": [
+                    {
+                      "text": "udp:1",
+                      "width": 32,
+                      "height": 14
+                    }
+                  ],
+                  "width": 8,
+                  "height": 8
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "dev__SubA__Hub",
+          "labels": [
+            {
+              "text": "Hub",
+              "width": 31,
+              "height": 18
+            }
+          ],
+          "layoutOptions": {
+            "elk.portConstraints": "FREE",
+            "elk.portLabels.placement": "OUTSIDE ALWAYS_SAME_SIDE",
+            "elk.portLabels.nextToPortIfPossible": "true",
+            "elk.nodeSize.constraints": "NODE_LABELS PORTS PORT_LABELS",
+            "elk.nodeSize.options": "ASYMMETRICAL",
+            "elk.nodeLabels.placement": "INSIDE V_TOP H_LEFT",
+            "elk.padding": "[top=8,left=8,bottom=8,right=8]"
+          },
+          "ports": [
+            {
+              "id": "port__SubA__Hub___in",
+              "labels": [
+                {
+                  "text": "in",
+                  "width": 13,
+                  "height": 14
+                }
+              ],
+              "width": 8,
+              "height": 8
+            },
+            {
+              "id": "port__SubA__Hub___out",
+              "labels": [
+                {
+                  "text": "out",
+                  "width": 20,
+                  "height": 14
+                }
+              ],
+              "width": 8,
+              "height": 8
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sub__SubB",
+      "labels": [
+        {
+          "text": "SubB",
+          "width": 43,
+          "height": 22
+        }
+      ],
+      "layoutOptions": {
+        "elk.padding": "[top=40,left=16,bottom=16,right=16]",
+        "elk.spacing.nodeNode": "40",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "10",
+        "elk.nodeLabels.placement": "OUTSIDE V_TOP H_LEFT",
+        "elk.spacing.edgeLabel": "8",
+        "elk.nodeSize.constraints": "MINIMUM_SIZE",
+        "elk.nodeSize.minimum": "(75, 0)",
+        "elk.spacing.portPort": "11",
+        "elk.spacing.portsSurrounding": "[top=15,left=10,bottom=10,right=10]"
+      },
+      "children": [
+        {
+          "id": "dev__SubB__DevB",
+          "labels": [
+            {
+              "text": "DevB",
+              "width": 39,
+              "height": 18
+            }
+          ],
+          "layoutOptions": {
+            "elk.portConstraints": "FREE",
+            "elk.portLabels.placement": "OUTSIDE ALWAYS_SAME_SIDE",
+            "elk.portLabels.nextToPortIfPossible": "true",
+            "elk.nodeSize.constraints": "NODE_LABELS",
+            "elk.nodeSize.options": "ASYMMETRICAL",
+            "elk.nodeLabels.placement": "OUTSIDE V_TOP H_LEFT",
+            "elk.padding": "[top=28,left=8,bottom=8,right=8]",
+            "elk.spacing.nodeNode": "30",
+            "elk.spacing.portPort": "11",
+            "elk.spacing.portsSurrounding": "[top=15,left=10,bottom=10,right=10]",
+            "elk.spacing.edgeLabel": "8",
+            "elk.hierarchyHandling": "SEPARATE_CHILDREN"
+          },
+          "ports": [
+            {
+              "id": "port__SubB__DevB___eth0",
+              "labels": [
+                {
+                  "text": "eth0",
+                  "width": 27,
+                  "height": 14
+                }
+              ],
+              "width": 8,
+              "height": 8
+            }
+          ],
+          "children": [
+            {
+              "id": "comp__SubB__DevB__srv",
+              "labels": [
+                {
+                  "text": "srv",
+                  "width": 21,
+                  "height": 16
+                }
+              ],
+              "layoutOptions": {
+                "elk.portConstraints": "FREE",
+                "elk.portLabels.placement": "OUTSIDE ALWAYS_SAME_SIDE",
+                "elk.portLabels.nextToPortIfPossible": "true",
+                "elk.nodeSize.constraints": "NODE_LABELS PORTS PORT_LABELS",
+                "elk.nodeSize.options": "ASYMMETRICAL",
+                "elk.nodeLabels.placement": "INSIDE V_TOP H_LEFT",
+                "elk.spacing.labelPort": "8"
+              },
+              "ports": [
+                {
+                  "id": "port__SubB__DevB___srv___tcp_2",
+                  "labels": [
+                    {
+                      "text": "tcp:2",
+                      "width": 29,
+                      "height": 14
+                    }
+                  ],
+                  "width": 8,
+                  "height": 8
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_0",
+      "sources": [
+        "port__SubA__DevA___eth0"
+      ],
+      "targets": [
+        "port__SubB__DevB___eth0"
+      ],
+      "labels": [
+        {
+          "text": "MAVLink",
+          "width": 45,
+          "height": 14,
+          "layoutOptions": {
+            "org.eclipse.elk.edgeLabels.inline": "true"
+          }
+        }
+      ]
+    }
+  ]
+}
