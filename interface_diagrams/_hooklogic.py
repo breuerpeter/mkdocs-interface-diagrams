@@ -27,38 +27,13 @@ import posixpath
 import re
 from pathlib import Path
 
+from mkdocs.utils import get_relative_url as _get_relative_url
+
 # The diagram tool owns the slug contract (qualified_name) and the system
 # diagram's name (manifest.SYSTEM_NAME). Import them so placement derivation and
 # rendering use the exact same naming the generator does — one source of truth.
 from interface_diagrams import manifest
 from interface_diagrams.embed import qualified_name
-
-
-# Pure-Python URL helpers: same logic as get_relative_url / _norm_parts from the
-# MkDocs utils module, inlined so _hooklogic.py carries no build-framework import.
-@functools.lru_cache(maxsize=None)
-def _norm_parts(path: str) -> list:
-    if not path.startswith("/"):
-        path = "/" + path
-    path = posixpath.normpath(path)[1:]
-    return path.split("/") if path else []
-
-
-def _get_relative_url(url: str, other: str) -> str:
-    """Return *url* expressed relative to *other* (path-relative URL computation)."""
-    dirname, _, basename = other.rpartition("/")
-    if "." in basename:
-        other = dirname
-    other_parts = _norm_parts(other)
-    dest_parts = _norm_parts(url)
-    common = 0
-    for a, b in zip(other_parts, dest_parts):
-        if a != b:
-            break
-        common += 1
-    rel_parts = [".."] * (len(other_parts) - common) + dest_parts[common:]
-    relurl = "/".join(rel_parts) or "."
-    return relurl + "/" if url.endswith("/") else relurl
 
 _WIKILINK = re.compile(r"(?<!!)\[\[([^\]]+?)\]\]")
 _SVG_HREF = re.compile(r'(href|xlink:href)="([^"/]+?\.svg)"')
