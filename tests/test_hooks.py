@@ -57,7 +57,7 @@ Intro prose.
 """
 
 
-def docs_tree(td: str, svgs=()) -> Path:
+def docs_tree(td: str, svgs=(), sub_doc=SUB_DOC) -> Path:
     """docs/<section>/ layout matching the real repo. `svgs` are the diagram
     stems to materialise under assets/diagrams/<section>/ — placement is derived
     from these existing, so tests create exactly the ones they exercise."""
@@ -65,7 +65,7 @@ def docs_tree(td: str, svgs=()) -> Path:
     section = docs / "drone-system"
     section.mkdir(parents=True)
     (section / "index.md").write_text(INDEX_DOC, encoding="utf-8")
-    (section / "SubA.md").write_text(SUB_DOC, encoding="utf-8")
+    (section / "SubA.md").write_text(sub_doc, encoding="utf-8")
     dd = docs / "assets" / "diagrams" / "drone-system"
     dd.mkdir(parents=True)
     for s in svgs:
@@ -213,12 +213,12 @@ class PageTransform(unittest.TestCase):
     titles onto their lightbox links and inlining the system overview — driven
     entirely by the derived placement (no managed blocks in the source)."""
 
-    def render(self, src_path, svgs, system_svg="<svg></svg>"):
+    def render(self, src_path, svgs, system_svg="<svg></svg>", sub_doc=SUB_DOC):
         from mkdocs.structure.files import File, Files
 
         td = tempfile.TemporaryDirectory()
         self.addCleanup(td.cleanup)
-        docs = docs_tree(td.name, svgs)
+        docs = docs_tree(td.name, svgs, sub_doc)
         # Give the system overview real content so inlining + href rewriting run.
         (docs / "assets" / "diagrams" / "drone-system" / "drone_system.svg").write_text(system_svg, encoding="utf-8")
         files = Files(
@@ -272,6 +272,18 @@ class PageTransform(unittest.TestCase):
         link = next(i for i, ln in enumerate(lines) if "diagram-link" in ln and "**telemetry**" in ln)
         self.assertEqual(lines[link + 1], "")
         self.assertTrue(lines[link + 2].lstrip().startswith("1."))
+
+    def test_tagged_flow_keeps_its_label_link_its_tag_and_its_waypoint_list(self):
+        """On a page, a tagged flow keeps its label as the lightbox link, shows
+        its tag as written and renders its waypoints as a list."""
+        import markdown
+
+        tagged = SUB_DOC.replace("**telemetry**\n", "**telemetry**\n`x_1`\n")
+        out = self.render("drone-system/SubA.md", ["drone_system", "suba-deva-udp_14550-mavlink-telemetry"], sub_doc=tagged)
+        self.assertRegex(
+            markdown.markdown(out),
+            r'(?s)class="diagram-link"[^>]*><strong>telemetry</strong></a>.*<code>x_1</code>.*<ol>\s*<li>',
+        )
 
     def test_inlined_system_svg_payload_token_link_resolves_to_its_svg(self):
         # A payload-token link inside the inlined system overview resolves to the
