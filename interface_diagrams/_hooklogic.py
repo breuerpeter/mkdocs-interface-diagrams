@@ -62,26 +62,29 @@ _LANDING_STEM = "index"
 #                      resolve through this); docs-relative path -> the doc's H1
 #                      title (the subsystem label shown in waypoints, not its
 #                      filename); docs-relative path of the system diagram;
-#                      section -> set of existing diagram stems.
+#                      section -> set of existing diagram stems; flow diagram
+#                      stem -> (doc, anchor of the heading above its label).
 _DIAGRAMS = None
 _PATHS = None
 _DOCS = None
 _TITLES = None
 _SYSTEM_SVG = {}  # section -> docs-relative path of its system svg
 _SECTION_STEMS = None
+_FLOW_SECTIONS = None
 
 
 def _reset_caches() -> None:
     """Reset all per-build scan caches.  Call once at the start of each build
     (plugin.on_config) so that a doc rename during ``mkdocs serve`` is picked up
     on the next rebuild rather than serving stale placement data."""
-    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS
+    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS, _FLOW_SECTIONS
     _DIAGRAMS = None
     _PATHS = None
     _DOCS = None
     _TITLES = None
     _SYSTEM_SVG = {}
     _SECTION_STEMS = None
+    _FLOW_SECTIONS = None
 
 
 def _doc_path(name: str, section: str = "") -> str:
@@ -228,10 +231,11 @@ def _anchor(disp, used):
 def _scan(docs_dir: str):
     """One ordered pass per doc: compute each heading's exact anchor and, from
     the heading structure + filename convention, where each diagram belongs."""
-    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS
+    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS, _FLOW_SECTIONS
     if _DIAGRAMS is not None:
         return _DIAGRAMS, _PATHS
     _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SECTION_STEMS, _SYSTEM_SVG = {}, {}, {}, {}, {}, {}
+    _FLOW_SECTIONS = {}
     for root, _dirs, fnames in os.walk(docs_dir):
         for fn in sorted(fnames):
             if not fn.endswith(".md"):
@@ -243,10 +247,11 @@ def _scan(docs_dir: str):
             with open(os.path.join(root, fn), encoding="utf-8") as fh:
                 lines = fh.read().split("\n")
             used = set()
+            above = None  # anchor of the last heading: a flow's section
             for rec in _walk(lines, doc_stem):
                 if rec[0] == "heading":
                     _, _i, _level, _text, disp, slug, paths = rec
-                    anchor = _anchor(disp, used)
+                    anchor = above = _anchor(disp, used)
                     if _level == 1:
                         _TITLES.setdefault(doc, disp)  # subsystem label
                     for p in paths:
@@ -261,6 +266,9 @@ def _scan(docs_dir: str):
                         # link opens the flow's diagram in the lightbox without
                         # navigating, so an unplaced (doc, None) entry suffices.
                         _DIAGRAMS.setdefault((_section_of(doc), slug), (doc, None))
+                        # Its section is the payload heading above its label,
+                        # where closing the lightbox on a target's view of it lands.
+                        _FLOW_SECTIONS.setdefault((_section_of(doc), slug), (doc, above))
             # The system overview is inlined on the landing page; it owns no
             # heading, so record it explicitly and remember its path so pages can
             # link "home" to it (diagram-lightbox.js).
@@ -377,6 +385,9 @@ def fix_built_svgs(config):
     if _FILES is None:
         return
     _diagrams, paths = _scan(config["docs_dir"])
+    # A target's diagram carries the all-targets section it belongs to; for a
+    # flow that is the payload heading above its label.
+    view_sections = {**_diagrams, **_FLOW_SECTIONS}
     doc_urls = {f.src_path.replace(os.sep, "/"): f.url for f in _FILES if f.src_path.endswith(".md")}
     for f in _FILES:
         if not f.src_path.endswith(".svg"):
@@ -389,7 +400,7 @@ def fix_built_svgs(config):
         sec = parts[2] if parts[:2] == ["assets", "diagrams"] and len(parts) > 3 else ""
         # assets/diagrams/<section>/<target>/<stem>.svg is a diagram of a target's view.
         in_view = parts[:2] == ["assets", "diagrams"] and len(parts) == 5
-        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, _diagrams, sec, in_view)
+        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, view_sections if in_view else _diagrams, sec, in_view)
         if fixed != svg:
             with open(dest, "w", encoding="utf-8") as fh:
                 fh.write(fixed)

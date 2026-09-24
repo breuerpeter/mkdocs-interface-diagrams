@@ -81,6 +81,15 @@ def test_a_box_link_in_a_targets_view_opens_the_same_targets_diagram(tagged_site
     assert subsystems == {(view / f"{s}.svg").resolve(): True for s in ("controller", "display", "sensor")}
 
 
+def test_a_targets_flow_diagram_carries_the_section_of_the_flows_payload_heading(tagged_site):
+    """Closing the lightbox on a target's flow diagram lands on the payload
+    heading above the flow's label, the flow's section on its page."""
+    view = tagged_site / "assets" / "diagrams" / "parity" / "x_1"
+    flow = view / "controller-mcu-app-eth0_ctrl-commands-telemetry_uplink.svg"
+    m = re.search(r'data-section="([^"]*)"', flow.read_text(encoding="utf-8")) if flow.is_file() else None
+    assert (m and m[1]) == "../../../../parity/controller/#commands"
+
+
 def test_a_tag_entry_that_matches_no_declared_target_fails_build_and_check(tmp_path, capsys):
     """A tag entry, name or glob, that matches no declared target fails `mkdocs build` and
     `interface-diagrams check`, and each message names the flow."""
