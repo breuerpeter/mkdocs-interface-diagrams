@@ -309,6 +309,11 @@ class PageTransform(unittest.TestCase):
         out = self.render("drone-system/index.md", ["drone_system", "x_1/drone_system"], index_doc=index)
         self.assertRegex(out, r'<a class="diagram-link" href="[^"]*/x_1/drone_system\.svg"[^>]*>x_1</a>')
 
+    def test_section_qualified_target_token_becomes_the_lightbox_link_to_the_targets_system_diagram(self):
+        index = INDEX_DOC.replace("system: Drone System\n", "system: Drone System\ntargets: [x_1]\n") + "\n[[target:drone-system/x_1]]\n"
+        out = self.render("drone-system/index.md", ["drone_system", "x_1/drone_system"], index_doc=index)
+        self.assertRegex(out, r'<a class="diagram-link" href="[^"]*/x_1/drone_system\.svg"[^>]*>x_1</a>')
+
     def test_target_token_for_an_undeclared_target_stops_the_build_naming_the_page(self):
         from mkdocs.exceptions import PluginError
 
