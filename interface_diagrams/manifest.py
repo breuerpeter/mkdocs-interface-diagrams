@@ -14,42 +14,42 @@ the names a flow's target tag may match; each target gets its own view.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
+import yaml
 
-def _frontmatter_field(path: Path, key: str) -> str | None:
-    """The raw value of `<key>:` in a doc's YAML frontmatter, or None."""
+
+def _frontmatter(path: Path) -> dict:
+    """A doc's YAML frontmatter, read as YAML like mkdocs reads it; {} when the
+    doc has none or it is not a YAML mapping."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
-        return None
+        return {}
     if not text.startswith("---"):
-        return None
+        return {}
     end = text.find("\n---", 3)
     if end == -1:
-        return None
-    for line in text[3:end].splitlines():
-        m = re.match(rf"^\s*{key}\s*:\s*(.+?)\s*$", line)
-        if m:
-            return m.group(1)
-    return None
+        return {}
+    try:
+        data = yaml.safe_load(text[3:end])
+    except yaml.YAMLError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def landing_system_name(path: Path) -> str | None:
     """The `system:` name from a doc's YAML frontmatter, or None. A page
     carrying this key is the system landing/overview page."""
-    name = _frontmatter_field(path, "system")
-    return name.strip().strip("\"'") if name else None
+    name = _frontmatter(path).get("system")
+    return str(name).strip() if name is not None else None
 
 
 def landing_targets(path: Path) -> list[str]:
-    """The `targets:` names from a landing page's frontmatter, written as a YAML
-    flow sequence (`targets: [x_1, x_2]`); [] when the page declares none."""
-    value = _frontmatter_field(path, "targets")
-    if not value:
-        return []
-    return [t.strip().strip("\"'") for t in value.strip("[]").split(",") if t.strip()]
+    """The `targets:` names from a landing page's frontmatter, a YAML list such
+    as `targets: [x_1, x_2]`; [] when the page declares none."""
+    targets = _frontmatter(path).get("targets") or []
+    return [str(t) for t in targets] if isinstance(targets, list) else [str(targets)]
 
 
 def system_name(folder: Path) -> str:

@@ -211,6 +211,13 @@ class ManifestSection(unittest.TestCase):
             targets = manifest.landing_targets(index)
         self.assertEqual(targets, ["x_1", "x_2"])
 
+    def test_a_comment_after_the_targets_list_is_not_part_of_a_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            index = Path(td) / "index.md"
+            index.write_text("---\nsystem: Test System\ntargets: [x_1, x_2] # deployed variants\n---\n", encoding="utf-8")
+            targets = manifest.landing_targets(index)
+        self.assertEqual(targets, ["x_1", "x_2"])
+
 
 if __name__ == "__main__":
     unittest.main()
