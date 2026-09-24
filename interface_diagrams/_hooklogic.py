@@ -13,7 +13,12 @@ plus that filename convention, where every diagram belongs. Then per page it:
     that opens it in the lightbox — collapsing the title onto the link — and
     rewrites each interface (port) label's href to its interface heading;
   * turns each `[[...]]` flow waypoint into a link to the referenced
-    interface's heading.
+    interface's heading, and each `[[target:<name>]]` into the lightbox link
+    that opens that target's view at its system diagram.
+
+A target's view (assets/diagrams/<section>/<target>/) is reached only in the
+lightbox: its diagrams keep their box links on each other, and each carries the
+all-targets section it belongs to, where closing the lightbox lands.
 
 The placement derivation here is the mirror of the tool's diagram naming
 (generate.py builds the same slugs from its parsed model); test_derivation.py

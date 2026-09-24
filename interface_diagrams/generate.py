@@ -12,11 +12,13 @@ into the --out directory:
   - one per interface     (flow trace through the interface)
   - one per flow          (that flow's end-to-end path)
 
-Each diagram is embedded back into its source doc via an idempotent managed
-block (system -> index.md bottom; subsystem -> doc top; device -> '## <Device>';
-component -> '#### <Component>'; interface -> the interface heading; flow path ->
-the flow's '**bold label**'). Parsing/flow rules live in the sibling
-interface-docs skill's spec.md."""
+For each target the landing page declares (`targets: [x_1, x_2]`), the same set
+again in <out>/<target>/, drawn from that target's flows alone: the flows its
+tag names and every untagged flow, over only the boxes they reach.
+
+The docs carry no generated markup: the mkdocs hook (_hooklogic.py) places each
+diagram from the doc's heading structure and the SVG's file name. Parsing/flow
+rules live in the sibling interface-docs skill's spec.md."""
 
 from __future__ import annotations
 
