@@ -138,6 +138,25 @@ def test_a_box_shows_in_a_targets_view_only_when_that_targets_flows_reach_it(vie
     assert drawn == {"x_1": (True, False), "x_2": (False, False)}
 
 
+def test_a_flow_with_a_dangling_waypoint_gets_no_diagram_in_any_view(tmp_path):
+    """A flow the all-targets view drops for a dangling waypoint stays dropped in
+    a target's view, even when no other flow of that target reaches the
+    subsystem the waypoint names."""
+    section = tmp_path / "drop"
+    section.mkdir()
+    for name, text in (
+        ("index.md", "---\nsystem: Drop\ntargets: [x_1, x_2]\n---\n# Drop\n"),
+        ("SubA.md", "# SubA\n\n## DevA\n### Interfaces\n#### eth0\n##### P\n\n**good**\n`x_1`\n1. [[SubB#DevB > eth0]]\n\n"
+                    "**bad**\n`x_2`\n1. [[SubC#DevC > nope]]\n"),
+        ("SubB.md", "# SubB\n\n## DevB\n### Interfaces\n#### eth0\n"),
+        ("SubC.md", "# SubC\n\n## DevC\n### Interfaces\n#### eth0\n"),
+    ):
+        (section / name).write_text(text, encoding="utf-8")
+    out = tmp_path / "out"
+    main(["generate", str(section), "--out", str(out)])
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*-bad.svg")) == []
+
+
 def test_a_targets_view_holds_each_diagram_kind_its_flows_reach(views):
     """A target's view holds each diagram kind, from system down to flow, drawn from that target's flows."""
     assert sorted(p.name for p in (views / "x_1").glob("*.svg")) == [

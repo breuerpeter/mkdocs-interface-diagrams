@@ -554,11 +554,14 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
     tasks = view_tasks(full, flows, out_dir)
     # Each target the landing page declares gets its own view in
     # <out>/<target>/, drawn from the flows that belong to it and over only the
-    # boxes they reach: every interface on their resolved chains.
+    # boxes they reach: every interface on their resolved chains. Only flows
+    # whose chain resolves in the whole system go in: in the cut-down system a
+    # dangling waypoint could read as an external stub instead of dropping the flow.
     index, parsed_subs = full.by_interface(), {d.subsystem for d in full.devices}
+    resolved = [f for f in flows if _resolve_chain(f, index, parsed_subs)]
     for target in targets:
-        t_flows = target_flows(flows, target)
-        keys = {key for f in t_flows if (chain := _resolve_chain(f, index, parsed_subs)) for key, _dev in chain}
+        t_flows = target_flows(resolved, target)
+        keys = {key for f in t_flows for key, _dev in _resolve_chain(f, index, parsed_subs)}
         tasks += view_tasks(reached_view(full, keys), t_flows, out_dir / target)
 
     # Render every diagram across the worker pool. A thread blocked on a node
