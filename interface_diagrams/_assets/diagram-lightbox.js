@@ -90,6 +90,18 @@
     if (lb) lb.remove();
   }
 
+  // The reader closed the overlay. A diagram of a target's view carries the
+  // all-targets section it belongs to (data-section, stamped at build time), so
+  // closing on it lands the page there; any other diagram leaves the page as is.
+  function dismissLightbox() {
+    var svg = document.querySelector(".diagram-lightbox > svg");
+    var section = svg && svg.getAttribute("data-section");
+    closeLightbox();
+    if (!section) return;
+    var url = new URL(section);
+    if (url.pathname !== location.pathname || url.hash) location.href = url.href;
+  }
+
   function openFromUrl(url) {
     fetch(url)
       .then(function (r) { return r.text(); })
@@ -106,6 +118,8 @@
             if (v) a.setAttribute(attr, new URL(v, url).href);
           });
         });
+        var section = svg.getAttribute("data-section");
+        if (section) svg.setAttribute("data-section", new URL(section, url).href);
         closeLightbox();
         openLightbox(svg, url.split("/").pop().split(/[?#]/)[0]);
       })
@@ -184,7 +198,7 @@
       return;
     }
     // 2. Any other click while the overlay is open closes it.
-    if (document.querySelector(".diagram-lightbox")) { closeLightbox(); return; }
+    if (document.querySelector(".diagram-lightbox")) { dismissLightbox(); return; }
     // 3. A diagram title in the prose (a heading / flow-label link) → open it.
     var openLink = e.target.closest("a.diagram-link");
     if (openLink) { e.preventDefault(); openFromUrl(openLink.href); return; }
@@ -195,7 +209,7 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") closeLightbox();
+    if (e.key === "Escape") dismissLightbox();
   });
 
   // On arrival from a cross-page diagram link, open the target section's diagram.

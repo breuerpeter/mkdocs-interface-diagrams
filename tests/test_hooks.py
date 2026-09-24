@@ -187,6 +187,12 @@ class FixStandaloneSvg(unittest.TestCase):
         out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
         self.assertIn('href="skynode-fmu_nuttx.svg"', out)
 
+    def test_a_targets_view_diagram_carries_its_all_targets_section(self):
+        # Closing the lightbox on this diagram lands on that section (diagram-lightbox.js).
+        svg_url = "diagrams/x_1/skynode-fmu_nuttx.svg"
+        out = hooks._fix_standalone_svg("<svg><text>FMU</text></svg>", svg_url, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('<svg data-section="../../skynode/#fmu-nuttx"', out)
+
     def test_unembedded_title_href_left_as_svg(self):
         # No section to link to -> leave the .svg so the lightbox opens it directly.
         self.assertIn('href="doodle_radio-radio_air.svg"', fix(SVG))

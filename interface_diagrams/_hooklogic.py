@@ -341,7 +341,13 @@ def _fix_standalone_svg(
 
     svg = _SVG_DOC_HREF.sub(iface, svg)
     if not in_view:
-        svg = _SVG_HREF.sub(title, svg)
+        return _SVG_HREF.sub(title, svg)
+    # Closing the lightbox on a target's diagram lands on the all-targets
+    # section of the same diagram (diagram-lightbox.js), so stamp it on the root.
+    loc = diagrams.get((section, posixpath.basename(svg_url)[:-4]))
+    u = _section_url(loc) if loc else None
+    if u:
+        svg = svg.replace("<svg", f'<svg data-section="{html.escape(u, quote=True)}"', 1)
     return svg
 
 
