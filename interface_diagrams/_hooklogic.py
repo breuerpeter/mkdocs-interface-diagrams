@@ -481,6 +481,11 @@ def apply_page_markdown(markdown, page, config, files):
     def sub_wikilink(m):
         target = m.group(1).split("|", 1)[0]
         alias = m.group(1).split("|", 1)[1] if "|" in m.group(1) else None
+        if target.startswith("target:"):
+            # `[[target:<name>]]` opens that target's view in the lightbox, at
+            # its system diagram (assets/diagrams/<section>/<name>/).
+            name = target[len("target:"):].strip()
+            return diagram_link(f"{name}/{_system_slug(docs_dir, here)}", alias or name)
         docpart, _, path = target.partition("#")
         docpart, path = docpart.strip(), _norm_path(path)
         doc = _doc_path(docpart, _section_of(here)) if docpart else here

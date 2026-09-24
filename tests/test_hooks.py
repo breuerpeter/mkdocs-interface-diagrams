@@ -57,18 +57,20 @@ Intro prose.
 """
 
 
-def docs_tree(td: str, svgs=(), sub_doc=SUB_DOC) -> Path:
+def docs_tree(td: str, svgs=(), sub_doc=SUB_DOC, index_doc=INDEX_DOC) -> Path:
     """docs/<section>/ layout matching the real repo. `svgs` are the diagram
     stems to materialise under assets/diagrams/<section>/ — placement is derived
-    from these existing, so tests create exactly the ones they exercise."""
+    from these existing, so tests create exactly the ones they exercise. A stem
+    like 'x_1/drone_system' lands in a target's view folder."""
     docs = Path(td) / "docs"
     section = docs / "drone-system"
     section.mkdir(parents=True)
-    (section / "index.md").write_text(INDEX_DOC, encoding="utf-8")
+    (section / "index.md").write_text(index_doc, encoding="utf-8")
     (section / "SubA.md").write_text(sub_doc, encoding="utf-8")
     dd = docs / "assets" / "diagrams" / "drone-system"
     dd.mkdir(parents=True)
     for s in svgs:
+        (dd / f"{s}.svg").parent.mkdir(parents=True, exist_ok=True)
         (dd / f"{s}.svg").write_text("<svg/>", encoding="utf-8")
     return docs
 
@@ -213,12 +215,12 @@ class PageTransform(unittest.TestCase):
     titles onto their lightbox links and inlining the system overview — driven
     entirely by the derived placement (no managed blocks in the source)."""
 
-    def render(self, src_path, svgs, system_svg="<svg></svg>", sub_doc=SUB_DOC):
+    def render(self, src_path, svgs, system_svg="<svg></svg>", sub_doc=SUB_DOC, index_doc=INDEX_DOC):
         from mkdocs.structure.files import File, Files
 
         td = tempfile.TemporaryDirectory()
         self.addCleanup(td.cleanup)
-        docs = docs_tree(td.name, svgs, sub_doc)
+        docs = docs_tree(td.name, svgs, sub_doc, index_doc)
         # Give the system overview real content so inlining + href rewriting run.
         (docs / "assets" / "diagrams" / "drone-system" / "drone_system.svg").write_text(system_svg, encoding="utf-8")
         files = Files(
@@ -284,6 +286,11 @@ class PageTransform(unittest.TestCase):
             markdown.markdown(out),
             r'(?s)class="diagram-link"[^>]*><strong>telemetry</strong></a>.*<code>x_1</code>.*<ol>\s*<li>',
         )
+
+    def test_target_token_becomes_the_lightbox_link_to_the_targets_system_diagram(self):
+        index = INDEX_DOC.replace("system: Drone System\n", "system: Drone System\ntargets: [x_1]\n") + "\n[[target:x_1]]\n"
+        out = self.render("drone-system/index.md", ["drone_system", "x_1/drone_system"], index_doc=index)
+        self.assertRegex(out, r'<a class="diagram-link" href="[^"]*/x_1/drone_system\.svg"[^>]*>x_1</a>')
 
     def test_inlined_system_svg_payload_token_link_resolves_to_its_svg(self):
         # A payload-token link inside the inlined system overview resolves to the
