@@ -121,6 +121,111 @@ def test_a_target_token_for_an_undeclared_target_fails_the_build(tmp_path):
     assert (built.returncode != 0, "parity/index.md" in output and "x_9" in output) == (True, True)
 
 
+# Beside the bare token, the parity landing page links x_1's view by
+# `[[target:<section>/<name>]]` in its own section and in section `other`,
+# which declares the same targets.
+QUALIFIED = TAGGED + [
+    ("parity/index.md", "[[target:x_1]]\n",
+     "[[target:x_1|bare]]\n\n[[target:parity/x_1|qualified]]\n\n[[target:other/x_1|other view]]\n"),
+]
+OTHER_INDEX = "---\nsystem: Other Demo\ntargets: [x_1, x_2]\n---\n# Other Demo\n"
+LIST_PAGE = "# Targets\n\n[[target:parity/x_1]]\n\n[[target:parity/x_1|All X1]]\n"
+DIAGRAM_LINK = re.compile(r'<a class="diagram-link" href="([^"]+)"[^>]*>(.*?)</a>')
+
+
+def write_list_page(site, text):
+    """Write `text` as `reference/list.md`, a page outside every section."""
+    page = site / "docs" / "reference" / "list.md"
+    page.parent.mkdir(parents=True)
+    page.write_text(text, encoding="utf-8")
+
+
+def diagram_links(page):
+    """(file it opens, link text) of each diagram link on a built page; [] when the build wrote no page."""
+    if not page.is_file():
+        return []
+    return [((page.parent / href).resolve(), text)
+            for href, text in DIAGRAM_LINK.findall(page.read_text(encoding="utf-8"))]
+
+
+@pytest.fixture(scope="module")
+def qualified_site(tmp_path_factory):
+    """The fixture site with QUALIFIED applied, a copy of `parity` as section
+    `other` and the list page, built once: (build result, output dir)."""
+    root = tmp_path_factory.mktemp("qualified")
+    site = site_copy(root, QUALIFIED)
+    shutil.copytree(site / "docs" / "parity", site / "docs" / "other")
+    (site / "docs" / "other" / "index.md").write_text(OTHER_INDEX, encoding="utf-8")
+    write_list_page(site, LIST_PAGE)
+    out = root / "site"
+    return build(site, out), out
+
+
+def test_a_section_qualified_target_token_on_a_page_outside_every_section_opens_the_view(qualified_site):
+    """`[[target:<section>/<name>]]` on a page outside every section opens that target's view."""
+    built, out = qualified_site
+    links = diagram_links(out / "reference" / "list" / "index.html")
+    view = (out / "assets" / "diagrams" / "parity" / "x_1" / "parity_demo.svg").resolve()
+    assert (built.returncode, {target for target, _ in links}, view.is_file()) == (0, {view}, True)
+
+
+def test_a_section_qualified_target_token_inside_its_section_opens_the_same_view_as_the_bare_token(qualified_site):
+    """The qualified token on a page inside the named section opens the same view as the bare token."""
+    _, out = qualified_site
+    links = {text: target for target, text in diagram_links(out / "parity" / "index.html")}
+    view = (out / "assets" / "diagrams" / "parity" / "x_1" / "parity_demo.svg").resolve()
+    assert (links.get("bare"), links.get("qualified")) == (view, view)
+
+
+def test_a_section_qualified_target_token_opens_the_named_sections_view_of_a_shared_name(qualified_site):
+    """When two sections declare the same name, the qualified token opens the named section's view."""
+    _, out = qualified_site
+    target = {text: t for t, text in diagram_links(out / "parity" / "index.html")}.get("other view")
+    opens = (target.parent, target.is_file()) if target else None
+    assert opens == ((out / "assets" / "diagrams" / "other" / "x_1").resolve(), True)
+
+
+def test_a_section_qualified_target_token_without_an_alias_shows_the_target_name(qualified_site):
+    """With no alias, the qualified token's link text is the target name."""
+    _, out = qualified_site
+    texts = [text for _, text in diagram_links(out / "reference" / "list" / "index.html")]
+    assert texts[:1] == ["x_1"]
+
+
+def test_a_section_qualified_target_token_with_an_alias_shows_the_alias(qualified_site):
+    """With an alias, the qualified token's link text is the alias."""
+    _, out = qualified_site
+    texts = [text for _, text in diagram_links(out / "reference" / "list" / "index.html")]
+    assert texts[1:] == ["All X1"]
+
+
+def build_list_page(tmp_path, token):
+    """`mkdocs build` of the TAGGED site with `token` on a page outside every
+    section: (whether it failed, its output)."""
+    site = site_copy(tmp_path, TAGGED)
+    write_list_page(site, f"# Targets\n\n{token}\n")
+    built = build(site, tmp_path / "site")
+    return built.returncode != 0, built.stdout + built.stderr
+
+
+def test_a_bare_target_token_on_a_page_outside_every_section_fails_the_build(tmp_path):
+    """A bare token on a page outside every section fails the build and names the page."""
+    failed, output = build_list_page(tmp_path, "[[target:x_1]]")
+    assert (failed, "reference/list.md" in output and "x_1" in output) == (True, True)
+
+
+def test_a_section_qualified_target_token_for_an_undeclared_target_fails_the_build(tmp_path):
+    """A qualified token for a target its section does not declare fails the build and names the page."""
+    failed, output = build_list_page(tmp_path, "[[target:parity/x_9]]")
+    assert (failed, "reference/list.md" in output and "parity/x_9" in output) == (True, True)
+
+
+def test_a_section_qualified_target_token_whose_folder_is_no_section_fails_the_build(tmp_path):
+    """A qualified token whose folder is no section fails the build and names the page."""
+    failed, output = build_list_page(tmp_path, "[[target:nosuch/x_1]]")
+    assert (failed, "reference/list.md" in output and "nosuch/x_1" in output) == (True, True)
+
+
 def test_a_dangling_waypoint_still_drops_its_flow_and_passes_the_build(tmp_path):
     """Any other flow error, such as a dangling waypoint, still drops the flow and passes `mkdocs build`."""
     site = site_copy(tmp_path, [
