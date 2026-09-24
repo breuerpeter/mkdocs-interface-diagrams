@@ -15,7 +15,12 @@ from interface_diagrams.model import (
 def chain_view(sys_: System, edges: list[Edge]) -> System:
     """Sub-System containing only the devices/components/interfaces that
     appear as endpoints of the traced edges."""
-    keys = {e.src_key for e in edges} | {e.dst_key for e in edges}
+    return reached_view(sys_, {e.src_key for e in edges} | {e.dst_key for e in edges})
+
+
+def reached_view(sys_: System, keys: set[tuple[str, str]]) -> System:
+    """Sub-System containing only the devices/components/interfaces whose
+    interface keys are in `keys`."""
     out = System(name=sys_.name, display_names=sys_.display_names)
     for d in sys_.devices:
         new_dev = Device(name=d.name, subsystem=d.subsystem)

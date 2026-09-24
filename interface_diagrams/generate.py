@@ -71,7 +71,7 @@ from interface_diagrams.edges import (
 
 
 
-from interface_diagrams.views import chain_view, filter_system, collapse_system, target_flows
+from interface_diagrams.views import chain_view, filter_system, collapse_system, reached_view, target_flows
 
 
 from interface_diagrams.elk import (
@@ -528,9 +528,13 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
 
     tasks = view_tasks(full, flows, out_dir)
     # Each target the landing page declares gets its own view in
-    # <out>/<target>/, drawn from the flows that belong to it.
+    # <out>/<target>/, drawn from the flows that belong to it and over only the
+    # boxes they reach: every interface on their resolved chains.
+    index, parsed_subs = full.by_interface(), {d.subsystem for d in full.devices}
     for target in targets:
-        tasks += view_tasks(full, target_flows(flows, target), out_dir / target)
+        t_flows = target_flows(flows, target)
+        keys = {key for f in t_flows if (chain := _resolve_chain(f, index, parsed_subs)) for key, _dev in chain}
+        tasks += view_tasks(reached_view(full, keys), t_flows, out_dir / target)
 
     # Render every diagram across the worker pool. A thread blocked on a node
     # round-trip releases the GIL, so the pool's workers stay saturated. Tasks

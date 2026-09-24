@@ -21,6 +21,7 @@ from interface_diagrams.generate import (
     filter_system,
     merge_labels,
     port_keys_for,
+    reached_view,
     single_flow_edges,
     target_flows,
     trace_flows,
@@ -392,6 +393,11 @@ class Views(PipelineTestCase):
         deva = next(d for d in view.devices if d.name == "DevA")
         self.assertEqual([i.name for i in deva.interfaces], ["eth0"])
         self.assertEqual(deva.components, [])  # udp:1 not an endpoint
+
+    def test_reached_view_keeps_only_the_boxes_the_keys_reach(self):
+        view = reached_view(self.sys, {("SubA", "DevA > proc > udp:1"), ("SubB", "DevB > eth0")})
+        boxes = {(d.name, tuple(i.name for i in d.interfaces), tuple(c.name for c in d.components)) for d in view.devices}
+        self.assertEqual(boxes, {("DevA", (), ("proc",)), ("DevB", ("eth0",), ())})
 
     def test_a_target_takes_its_tagged_flows_and_every_untagged_one(self):
         flows = [
