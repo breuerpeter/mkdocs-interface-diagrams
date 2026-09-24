@@ -17,8 +17,9 @@ plus that filename convention, where every diagram belongs. Then per page it:
     that opens that target's view at its system diagram.
 
 A target's view (assets/diagrams/<section>/<target>/) is reached only in the
-lightbox: its diagrams keep their box links on each other, and each carries the
-all-targets section it belongs to, where closing the lightbox lands.
+lightbox: its box and port links open the target's own diagrams, and each
+diagram carries the all-targets section it belongs to, where closing the
+lightbox lands.
 
 The placement derivation here is the mirror of the tool's diagram naming
 (generate.py builds the same slugs from its parsed model); test_derivation.py

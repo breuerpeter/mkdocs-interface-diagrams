@@ -9,9 +9,9 @@
 //    the overlay and navigate the page to the section behind it — letting you
 //    drill through the system diagram-by-diagram. Cross-page targets reload
 //    (no instant nav), so the intent is stashed and replayed on the next load.
-//  * A target's view lives only in the overlay: its box links open the target's
-//    own diagrams, and closing the overlay lands the page on the all-targets
-//    section of the last diagram shown.
+//  * A target's view lives only in the overlay: its box and port links open the
+//    target's own diagrams, and closing the overlay lands the page on the
+//    all-targets section of the last diagram shown.
 (function () {
   var INTENT = "diagram-autoopen"; // sessionStorage key: "<pathname>#<anchor>"
 
