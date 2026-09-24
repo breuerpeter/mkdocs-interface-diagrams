@@ -304,6 +304,13 @@ class PageTransform(unittest.TestCase):
         out = self.render("drone-system/index.md", ["drone_system", "x_1/drone_system"], index_doc=index)
         self.assertRegex(out, r'<a class="diagram-link" href="[^"]*/x_1/drone_system\.svg"[^>]*>x_1</a>')
 
+    def test_target_token_for_an_undeclared_target_stops_the_build_naming_the_page(self):
+        from mkdocs.exceptions import PluginError
+
+        index = INDEX_DOC.replace("system: Drone System\n", "system: Drone System\ntargets: [x_1]\n") + "\n[[target:x_9]]\n"
+        with self.assertRaisesRegex(PluginError, r"drone-system/index\.md.*x_9"):
+            self.render("drone-system/index.md", ["drone_system"], index_doc=index)
+
     def test_inlined_system_svg_payload_token_link_resolves_to_its_svg(self):
         # A payload-token link inside the inlined system overview resolves to the
         # diagram's .svg asset (the lightbox opens it), with NO page navigation.

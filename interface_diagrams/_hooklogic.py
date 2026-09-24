@@ -27,6 +27,7 @@ import posixpath
 import re
 from pathlib import Path
 
+from mkdocs.exceptions import PluginError
 from mkdocs.utils import get_relative_url as _get_relative_url
 
 # The diagram tool owns the slug contract (qualified_name) and the system
@@ -497,6 +498,8 @@ def apply_page_markdown(markdown, page, config, files):
             # `[[target:<name>]]` opens that target's view in the lightbox, at
             # its system diagram (assets/diagrams/<section>/<name>/).
             name = target[len("target:"):].strip()
+            if name not in manifest.landing_targets(Path(docs_dir, _section_of(here), "index.md")):
+                raise PluginError(f"{here}: [[target:{name}]] names no target that the section's index.md declares")
             return diagram_link(f"{name}/{_system_slug(docs_dir, here)}", alias or name)
         docpart, _, path = target.partition("#")
         docpart, path = docpart.strip(), _norm_path(path)
