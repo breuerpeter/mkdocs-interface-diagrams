@@ -13,13 +13,15 @@ plus that filename convention, where every diagram belongs. Then per page it:
     that opens it in the lightbox — collapsing the title onto the link — and
     rewrites each interface (port) label's href to its interface heading;
   * turns each `[[...]]` flow waypoint into a link to the referenced
-    interface's heading, and each `[[target:<name>]]` into the lightbox link
-    that opens that target's view at its system diagram.
+    interface's heading, and each `[[target:<section>/<name>]]` into the
+    lightbox link that opens that target's view at its system diagram, from
+    any page. The bare `[[target:<name>]]` names the page's own section.
 
 A target's view (assets/diagrams/<section>/<target>/) is reached only in the
 lightbox: its box and port links open the target's own diagrams, and each
 diagram carries the all-targets section it belongs to, where closing the
-lightbox lands.
+lightbox lands. Every diagram also carries its section's system diagram, which
+the lightbox's "Back to system diagram" opens.
 
 The placement derivation here is the mirror of the tool's diagram naming
 (generate.py builds the same slugs from its parsed model); test_derivation.py
@@ -400,6 +402,12 @@ def fix_built_svgs(config):
         # assets/diagrams/<section>/<target>/<stem>.svg is a diagram of a target's view.
         in_view = parts[:2] == ["assets", "diagrams"] and len(parts) == 5
         fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, view_sections if in_view else _diagrams, sec, in_view)
+        # Each diagram carries its section's system diagram, which the
+        # lightbox's "Back to system diagram" opens from any page.
+        home = _FILES.get_file_from_path(_SYSTEM_SVG[sec]) if sec in _SYSTEM_SVG else None
+        if home:
+            u = html.escape(_get_relative_url(home.url, f.url), quote=True)
+            fixed = fixed.replace("<svg", f'<svg data-system="{u}"', 1)
         if fixed != svg:
             with open(dest, "w", encoding="utf-8") as fh:
                 fh.write(fixed)
