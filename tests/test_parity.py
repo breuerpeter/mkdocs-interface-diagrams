@@ -54,3 +54,33 @@ def test_package_output_matches_golden(tmp_path):
     assert produced == expected, "diagram filename set drifted"
     for name in expected:
         assert _norm((out / name).read_text()) == _norm((GOLDEN / name).read_text()), name
+
+
+def test_tags_and_a_target_declaration_change_no_diagram_on_the_pages(tmp_path):
+    """Tags and a target declaration change no diagram on the pages."""
+    section = tmp_path / "parity"
+    shutil.copytree(FIX, section, ignore=shutil.ignore_patterns("golden"))
+    for doc, old, new in (
+        ("index.md", "system: Parity Demo\n", "system: Parity Demo\ntargets: [x_1, x_2]\n"),
+        ("controller.md", "**Telemetry uplink**\n", "**Telemetry uplink**\n`x_1`\n"),
+        ("controller.md", "**Sensor read**\n", "**Sensor read**\n`x_*`\n"),
+        ("display.md", "**Status reply**\n", "**Status reply**\n`x_2`\n"),
+    ):
+        path = section / doc
+        path.write_text(path.read_text().replace(old, new), encoding="utf-8")
+    out = tmp_path / "out"
+    rc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from interface_diagrams.generate import main; "
+            f"raise SystemExit(main([{str(section)!r}, '--out', {str(out)!r}]))",
+        ],
+        cwd=ROOT,
+    ).returncode
+    changed = [
+        p.name
+        for p in sorted(GOLDEN.glob("*.svg"))
+        if not (out / p.name).is_file() or _norm((out / p.name).read_text()) != _norm(p.read_text())
+    ]
+    assert (rc, changed) == (0, [])

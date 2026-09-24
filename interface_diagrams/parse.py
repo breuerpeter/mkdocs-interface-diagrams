@@ -19,6 +19,11 @@ FLOW_ITEM_RE = re.compile(r"^\d+\.\s*\[\[(?P<link>[^\]]+)\]\]\s*$")
 # `**<label>**`. Distinguishes one flow from its base-mates (e.g. several MAVLink
 # flows under one `###### MAVLink`). Mid-sentence bold in prose won't match.
 BOLD_RE = re.compile(r"^\*\*(?P<label>.+?)\*\*$")
+# A flow's target tag: its own line of code spans right under the bold label,
+# each a target name or a glob (e.g. `x_1` `y_*`). A flow with no tag belongs to
+# every target.
+TAG_RE = re.compile(r"^`[^`]+`(?:\s+`[^`]+`)*$")
+TAG_ENTRY_RE = re.compile(r"`([^`]+)`")
 
 # Interface docs are named "<subsystem title>.md" — the file stem IS the
 # subsystem title (used for matching, labels, colors, and cross-doc references).
@@ -51,6 +56,7 @@ def parse_subsystem(path: Path) -> tuple[list[Device], list[Flow], str]:
     cur_payload: str | None = None
     cur_source: tuple[str, str] | None = None
     cur_flow: Flow | None = None
+    label_above = False  # the line before was a flow's bold label
 
     def end_payload():
         nonlocal cur_payload, cur_source, cur_flow
@@ -58,6 +64,7 @@ def parse_subsystem(path: Path) -> tuple[list[Device], list[Flow], str]:
 
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.rstrip()
+        under_label, label_above = label_above, False
 
         if line.startswith("# ") and not line.startswith("## ") and display_name == subsystem:
             display_name = line[2:].strip()
@@ -120,6 +127,10 @@ def parse_subsystem(path: Path) -> tuple[list[Device], list[Flow], str]:
                     payload=cur_payload, subsystem=subsystem, source=cur_source, label=m.group("label").strip()
                 )
                 flows.append(cur_flow)
+                label_above = True
+                continue
+            if under_label and TAG_RE.match(line.strip()):
+                cur_flow.targets = tuple(e.strip() for e in TAG_ENTRY_RE.findall(line))
                 continue
             m = FLOW_ITEM_RE.match(line)
             if m:

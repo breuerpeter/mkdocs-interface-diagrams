@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from fnmatch import fnmatchcase
+
 from interface_diagrams.model import (
     System,
     Device,
     Component,
     Edge,
+    Flow,
     _heading_for,
 )
 
@@ -12,7 +15,12 @@ from interface_diagrams.model import (
 def chain_view(sys_: System, edges: list[Edge]) -> System:
     """Sub-System containing only the devices/components/interfaces that
     appear as endpoints of the traced edges."""
-    keys = {e.src_key for e in edges} | {e.dst_key for e in edges}
+    return reached_view(sys_, {e.src_key for e in edges} | {e.dst_key for e in edges})
+
+
+def reached_view(sys_: System, keys: set[tuple[str, str]]) -> System:
+    """Sub-System containing only the devices/components/interfaces whose
+    interface keys are in `keys`."""
     out = System(name=sys_.name, display_names=sys_.display_names)
     for d in sys_.devices:
         new_dev = Device(name=d.name, subsystem=d.subsystem)
@@ -25,6 +33,13 @@ def chain_view(sys_: System, edges: list[Edge]) -> System:
         if new_dev.interfaces or new_dev.components:
             out.devices.append(new_dev)
     return out
+
+
+def target_flows(flows: list[Flow], target: str) -> list[Flow]:
+    """The flows in one target's view: every flow with no tag, which belongs to
+    every target, and every flow with a tag entry (a name or a glob) that
+    matches the target."""
+    return [f for f in flows if not f.targets or any(fnmatchcase(target, e) for e in f.targets)]
 
 
 def filter_system(sys_, subsystems, devices, components) -> System:

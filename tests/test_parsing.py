@@ -119,6 +119,11 @@ class ParseSubsystem(PipelineTestCase):
         self.assertEqual(len(unlabeled), 1)
         self.assertEqual(unlabeled[0].payload, "MAVLink")
 
+    def test_a_code_span_line_under_a_label_gives_the_flow_its_targets(self):
+        doc = DOC.replace("**telemetry**\n", "**telemetry**\n`x_1` `y_*`\n")
+        _, flows, _dn = self._parse(doc)
+        self.assertEqual({f.label: f.targets for f in flows}, {"telemetry": ("x_1", "y_*"), "commands": (), "RC channel": ()})
+
     def test_headings_outside_known_sections_are_ignored(self):
         doc = "## Dev\n### Notes\n#### not-an-interface\n"
         devices, flows, _dn = self._parse(doc)
@@ -198,6 +203,20 @@ class ManifestSection(unittest.TestCase):
             name, docs = manifest.parse_section(Path(td))
         self.assertEqual(name, "Test System")
         self.assertEqual([p.name for p in docs], ["Alpha.md", "Zeta.md"])
+
+    def test_landing_page_frontmatter_lists_the_sections_targets(self):
+        with tempfile.TemporaryDirectory() as td:
+            index = Path(td) / "index.md"
+            index.write_text("---\nsystem: Test System\ntargets: [x_1, x_2]\n---\n", encoding="utf-8")
+            targets = manifest.landing_targets(index)
+        self.assertEqual(targets, ["x_1", "x_2"])
+
+    def test_a_comment_after_the_targets_list_is_not_part_of_a_name(self):
+        with tempfile.TemporaryDirectory() as td:
+            index = Path(td) / "index.md"
+            index.write_text("---\nsystem: Test System\ntargets: [x_1, x_2] # deployed variants\n---\n", encoding="utf-8")
+            targets = manifest.landing_targets(index)
+        self.assertEqual(targets, ["x_1", "x_2"])
 
 
 if __name__ == "__main__":

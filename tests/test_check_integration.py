@@ -109,6 +109,15 @@ class CheckIntegration(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("advisory", err)
 
+    def test_a_target_name_that_is_not_a_plain_folder_name_fails_check(self):
+        # A target's view is a folder under --out: `.` would be the all-targets
+        # folder itself, and `../x` a folder outside it.
+        docs = dict(VALID)
+        docs["index.md"] = "---\nsystem: Drone System\ntargets: [., x_1]\n---\n# Drone System\n"
+        with tempfile.TemporaryDirectory() as td:
+            code, err = run_check(write_section(td, docs))
+        self.assertEqual((code, "target `.`" in err), (1, True))
+
     def test_empty_section_errors(self):
         with tempfile.TemporaryDirectory() as td:
             code, _ = run_check(write_section(td, {"index.md": "---\nsystem: T\n---\n# T\n"}))

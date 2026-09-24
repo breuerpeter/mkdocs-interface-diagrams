@@ -57,18 +57,20 @@ Intro prose.
 """
 
 
-def docs_tree(td: str, svgs=()) -> Path:
+def docs_tree(td: str, svgs=(), sub_doc=SUB_DOC, index_doc=INDEX_DOC) -> Path:
     """docs/<section>/ layout matching the real repo. `svgs` are the diagram
     stems to materialise under assets/diagrams/<section>/ — placement is derived
-    from these existing, so tests create exactly the ones they exercise."""
+    from these existing, so tests create exactly the ones they exercise. A stem
+    like 'x_1/drone_system' lands in a target's view folder."""
     docs = Path(td) / "docs"
     section = docs / "drone-system"
     section.mkdir(parents=True)
-    (section / "index.md").write_text(INDEX_DOC, encoding="utf-8")
-    (section / "SubA.md").write_text(SUB_DOC, encoding="utf-8")
+    (section / "index.md").write_text(index_doc, encoding="utf-8")
+    (section / "SubA.md").write_text(sub_doc, encoding="utf-8")
     dd = docs / "assets" / "diagrams" / "drone-system"
     dd.mkdir(parents=True)
     for s in svgs:
+        (dd / f"{s}.svg").parent.mkdir(parents=True, exist_ok=True)
         (dd / f"{s}.svg").write_text("<svg/>", encoding="utf-8")
     return docs
 
@@ -179,6 +181,23 @@ class FixStandaloneSvg(unittest.TestCase):
         # An embedded diagram's title link -> the section that embeds it.
         self.assertIn('href="../skynode/#fmu-nuttx"', fix(SVG))
 
+    def test_title_href_in_a_targets_view_stays_its_svg(self):
+        # A target's view keeps its box links on its own diagrams, which the
+        # lightbox opens in place, instead of the all-targets sections.
+        out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('href="skynode-fmu_nuttx.svg"', out)
+
+    def test_port_href_in_a_targets_view_opens_the_targets_interface_diagram(self):
+        # The target's own diagram of that interface sits beside this one.
+        out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('href="skynode-fmu_nuttx-uart_dev_ttys4.svg"', out)
+
+    def test_a_targets_view_diagram_carries_its_all_targets_section(self):
+        # Closing the lightbox on this diagram lands on that section (diagram-lightbox.js).
+        svg_url = "diagrams/x_1/skynode-fmu_nuttx.svg"
+        out = hooks._fix_standalone_svg("<svg><text>FMU</text></svg>", svg_url, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('<svg data-section="../../skynode/#fmu-nuttx"', out)
+
     def test_unembedded_title_href_left_as_svg(self):
         # No section to link to -> leave the .svg so the lightbox opens it directly.
         self.assertIn('href="doodle_radio-radio_air.svg"', fix(SVG))
@@ -213,12 +232,12 @@ class PageTransform(unittest.TestCase):
     titles onto their lightbox links and inlining the system overview — driven
     entirely by the derived placement (no managed blocks in the source)."""
 
-    def render(self, src_path, svgs, system_svg="<svg></svg>"):
+    def render(self, src_path, svgs, system_svg="<svg></svg>", sub_doc=SUB_DOC, index_doc=INDEX_DOC):
         from mkdocs.structure.files import File, Files
 
         td = tempfile.TemporaryDirectory()
         self.addCleanup(td.cleanup)
-        docs = docs_tree(td.name, svgs)
+        docs = docs_tree(td.name, svgs, sub_doc, index_doc)
         # Give the system overview real content so inlining + href rewriting run.
         (docs / "assets" / "diagrams" / "drone-system" / "drone_system.svg").write_text(system_svg, encoding="utf-8")
         files = Files(
@@ -272,6 +291,30 @@ class PageTransform(unittest.TestCase):
         link = next(i for i, ln in enumerate(lines) if "diagram-link" in ln and "**telemetry**" in ln)
         self.assertEqual(lines[link + 1], "")
         self.assertTrue(lines[link + 2].lstrip().startswith("1."))
+
+    def test_tagged_flow_keeps_its_label_link_its_tag_and_its_waypoint_list(self):
+        """On a page, a tagged flow keeps its label as the lightbox link, shows
+        its tag as written and renders its waypoints as a list."""
+        import markdown
+
+        tagged = SUB_DOC.replace("**telemetry**\n", "**telemetry**\n`x_1`\n")
+        out = self.render("drone-system/SubA.md", ["drone_system", "suba-deva-udp_14550-mavlink-telemetry"], sub_doc=tagged)
+        self.assertRegex(
+            markdown.markdown(out),
+            r'(?s)class="diagram-link"[^>]*><strong>telemetry</strong></a>.*<code>x_1</code>.*<ol>\s*<li>',
+        )
+
+    def test_target_token_becomes_the_lightbox_link_to_the_targets_system_diagram(self):
+        index = INDEX_DOC.replace("system: Drone System\n", "system: Drone System\ntargets: [x_1]\n") + "\n[[target:x_1]]\n"
+        out = self.render("drone-system/index.md", ["drone_system", "x_1/drone_system"], index_doc=index)
+        self.assertRegex(out, r'<a class="diagram-link" href="[^"]*/x_1/drone_system\.svg"[^>]*>x_1</a>')
+
+    def test_target_token_for_an_undeclared_target_stops_the_build_naming_the_page(self):
+        from mkdocs.exceptions import PluginError
+
+        index = INDEX_DOC.replace("system: Drone System\n", "system: Drone System\ntargets: [x_1]\n") + "\n[[target:x_9]]\n"
+        with self.assertRaisesRegex(PluginError, r"drone-system/index\.md.*x_9"):
+            self.render("drone-system/index.md", ["drone_system"], index_doc=index)
 
     def test_inlined_system_svg_payload_token_link_resolves_to_its_svg(self):
         # A payload-token link inside the inlined system overview resolves to the

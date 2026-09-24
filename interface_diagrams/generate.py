@@ -12,11 +12,13 @@ into the --out directory:
   - one per interface     (flow trace through the interface)
   - one per flow          (that flow's end-to-end path)
 
-Each diagram is embedded back into its source doc via an idempotent managed
-block (system -> index.md bottom; subsystem -> doc top; device -> '## <Device>';
-component -> '#### <Component>'; interface -> the interface heading; flow path ->
-the flow's '**bold label**'). Parsing/flow rules live in the sibling
-interface-docs skill's spec.md."""
+For each target the landing page declares (`targets: [x_1, x_2]`), the same set
+again in <out>/<target>/, drawn from that target's flows alone: the flows its
+tag names and every untagged flow, over only the boxes they reach.
+
+The docs carry no generated markup: the mkdocs hook (_hooklogic.py) places each
+diagram from the doc's heading structure and the SVG's file name. Parsing/flow
+rules live in the sibling interface-docs skill's spec.md."""
 
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ import itertools
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -66,12 +69,13 @@ from interface_diagrams.edges import (
     drawable_flow_stems,
     port_keys_for,
     classify_edges,
+    unmatched_tags,
 )
 
 
 
 
-from interface_diagrams.views import chain_view, filter_system, collapse_system
+from interface_diagrams.views import chain_view, filter_system, collapse_system, reached_view, target_flows
 
 
 from interface_diagrams.elk import (
@@ -252,8 +256,16 @@ def planned_stems(doc_paths: list[Path]) -> set[str]:
     return stems
 
 
+# A declared target names its own folder under --out, so it must be a plain
+# folder name: letters, digits, '.', '_' and '-', starting with a letter or digit.
+TARGET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
 def generate_section(section: Path, out: Path, check: bool = False) -> int:
-    """Generate (or, with check=True, only validate) one system folder. Returns exit code."""
+    """Generate (or, with check=True, only validate) one system folder. Returns
+    the exit code: 0 done; 1 the docs have errors (with check=True any
+    validation issue; when generating, a bad target declaration or a tag entry
+    that matches no declared target, which stops the build); 2 a setup error."""
     import interface_diagrams.edges as _edges_mod
     _edges_mod._VALIDATION_WARNINGS = 0
     _edges_mod._VALIDATION_SOFT_WARNINGS = 0
@@ -275,14 +287,26 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
 
     full, flows, parsed_docs, unresolved = parse_closure(doc_paths)
     all_subs = sorted({d.subsystem for d in full.devices})
+    targets = manifest.landing_targets(overview)
+    errors = [
+        f"{overview}: target `{t}` is not a plain folder name "
+        "(letters, digits, '.', '_' and '-', starting with a letter or digit)"
+        for t in targets
+        if not TARGET_NAME.fullmatch(t)
+    ]
+    errors += [
+        f"flow '{_flow_name(f)}' on '{_fmt_key(f.source)}': tag entry `{entry}` matches no "
+        f"target that {overview} declares ({', '.join(targets) or 'none'})"
+        for f, entry in unmatched_tags(flows, targets)
+    ]
+    for e in errors:
+        print(f"error: {e}", file=sys.stderr)
 
     if check:
         derive_edges(flows, full)
-        if _edges_mod._VALIDATION_WARNINGS:
-            print(
-                f"check failed: {_edges_mod._VALIDATION_WARNINGS} issue(s) across {len(parsed_docs)} parsed doc(s)",
-                file=sys.stderr,
-            )
+        issues = _edges_mod._VALIDATION_WARNINGS + len(errors)
+        if issues:
+            print(f"check failed: {issues} issue(s) across {len(parsed_docs)} parsed doc(s)", file=sys.stderr)
             return 1
         advisory = (
             f" ({_edges_mod._VALIDATION_SOFT_WARNINGS} advisory warning(s))"
@@ -291,6 +315,8 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
         )
         print(f"check passed: {len(parsed_docs)} doc(s), {len(flows)} flows{advisory}", file=sys.stderr)
         return 0
+    if errors:
+        return 1
 
     # Newton fork: a single STABLE output folder (not dated) so re-rendering is
     # idempotent — embeds always point at "diagrams/…", and unchanged docs
@@ -302,7 +328,7 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
     # docs-relative path from this layout (assets/diagrams/<section>/<stem>.svg).
     out_dir: Path = out
     if out_dir.exists():
-        for old in out_dir.glob("*.svg"):
+        for old in [*out_dir.glob("*.svg"), *out_dir.glob("*/*.svg")]:
             old.unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -317,203 +343,226 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
     import interface_diagrams.elk as _elk_mod
     _elk_mod._ELK_POOL = _ELK_POOL
 
-    # The flows that emit a path diagram (§5 below) — single-flow token targets.
-    drawable_stems = drawable_flow_stems(flows, full, unresolved)
-    edges = derive_edges(flows, full, drawable_stems)
-    # Every (segment, payload) token's link, keyed by the full-graph edges so a
-    # focused view opens the SAME diagram as the system view. Multi-flow tokens
-    # link to a synthetic aggregate diagram (§7), generated here.
-    token_links = {(frozenset({e.src_key, e.dst_key}), text): link for e in edges for text, link in e.tokens}
-    aggregates = aggregate_diagrams(flows, full)
+    def view_tasks(full, flows, out_dir):
+        """The render tasks of one view: every diagram drawn from `flows` over
+        the boxes of `full`, each writing <stem>.svg into `out_dir`. Colours come
+        from the whole system's subsystems, so a subsystem keeps its colour in
+        every view."""
+        out_dir.mkdir(parents=True, exist_ok=True)
+        subs = sorted({d.subsystem for d in full.devices})
 
-    def emit(laid_out, view, redges, collapsed, reversed_edges, stem, link_subs=None):
-        """Write the diagram's SVG.
+        # The flows that emit a path diagram (§5 below) — single-flow token targets.
+        drawable_stems = drawable_flow_stems(flows, full, unresolved)
+        edges = derive_edges(flows, full, drawable_stems)
+        # Every (segment, payload) token's link, keyed by the full-graph edges so a
+        # focused view opens the SAME diagram as the system view. Multi-flow tokens
+        # link to a synthetic aggregate diagram (§7), generated here.
+        token_links = {(frozenset({e.src_key, e.dst_key}), text): link for e in edges for text, link in e.tokens}
+        aggregates = aggregate_diagrams(flows, full)
 
-        `link_subs` overrides which subsystem titles are clickable (defaults to
-        `collapsed`); flow-trace views pass every subsystem in the view so all
-        subsystem titles navigate to their detail diagram."""
-        scene = build_excalidraw(
-            laid_out, view, redges, all_subs, collapsed=collapsed, link_subs=link_subs, reversed_edges=reversed_edges
-        )
-        (out_dir / f"{stem}.svg").write_text(render_svg(scene["elements"]), encoding="utf-8")
-        print(f"wrote {out_dir / (stem + '.svg')}", file=sys.stderr)
+        def emit(laid_out, view, redges, collapsed, reversed_edges, stem, link_subs=None):
+            """Write the diagram's SVG.
 
-    def compute_subsystem(expanded: set[str], all_collapsed: bool):
-        # The system diagram is focus-less (every subsystem collapsed → show the
-        # whole inter-subsystem mesh); a per-subsystem diagram focuses on the
-        # expanded subsystem, so its collapsed neighbours keep only their
-        # focus-facing surface (no lateral neighbour↔neighbour detail).
-        focus = None if all_collapsed else expanded
-        if all_collapsed:
-            collapsed = {s for s in all_subs if s not in unresolved}
-            view = System(name=full.name, devices=list(full.devices), display_names=full.display_names)
-        else:
-            exp_view = filter_system(full, expanded, set(), set())
-            exp_keys = port_keys_for(exp_view)
-            collapsed = set()
-            for e in edges:
-                if e.src_key in exp_keys and e.dst_key[0] not in expanded:
-                    collapsed.add(e.dst_key[0])
-                if e.dst_key in exp_keys and e.src_key[0] not in expanded:
-                    collapsed.add(e.src_key[0])
-            collapsed -= unresolved
-            neigh = filter_system(full, collapsed, set(), set()).devices if collapsed else []
-            view = System(name=full.name, devices=exp_view.devices + neigh, display_names=full.display_names)
-        view = collapse_system(view, collapsed, edges, focus=focus)
-        redges = classify_edges(edges, port_keys_for(view), collapsed, unresolved)
-        laid_out, reversed_edges = layout(emit_elk_spec(view, redges, collapsed))
-        return laid_out, view, redges, collapsed, reversed_edges
+            `link_subs` overrides which subsystem titles are clickable (defaults to
+            `collapsed`); flow-trace views pass every subsystem in the view so all
+            subsystem titles navigate to their detail diagram."""
+            scene = build_excalidraw(
+                laid_out, view, redges, all_subs, collapsed=collapsed, link_subs=link_subs, reversed_edges=reversed_edges
+            )
+            (out_dir / f"{stem}.svg").write_text(render_svg(scene["elements"]), encoding="utf-8")
+            print(f"wrote {out_dir / (stem + '.svg')}", file=sys.stderr)
 
-    def compute_trace(
-        device: str | None = None, component: str | None = None, iface_key: tuple[str, str] | None = None
-    ):
-        """Flow-trace view for a device, component, or single interface; None if
-        no flows touch it."""
-        parsed_subs = {d.subsystem for d in full.devices}
-        traced, tedges = trace_flows(
-            flows, full, device, component, parsed_subs, iface_key=iface_key, token_links=token_links
-        )
-        if not traced:
-            return None
-        view = chain_view(full, tedges)
-        redges = classify_edges(tedges, port_keys_for(view), set(), unresolved)
-        laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
-        return laid_out, view, redges, set(), reversed_edges
+        def compute_subsystem(expanded: set[str], all_collapsed: bool):
+            # The system diagram is focus-less (every subsystem collapsed → show the
+            # whole inter-subsystem mesh); a per-subsystem diagram focuses on the
+            # expanded subsystem, so its collapsed neighbours keep only their
+            # focus-facing surface (no lateral neighbour↔neighbour detail).
+            focus = None if all_collapsed else expanded
+            if all_collapsed:
+                collapsed = {s for s in subs if s not in unresolved}
+                view = System(name=full.name, devices=list(full.devices), display_names=full.display_names)
+            else:
+                exp_view = filter_system(full, expanded, set(), set())
+                exp_keys = port_keys_for(exp_view)
+                collapsed = set()
+                for e in edges:
+                    if e.src_key in exp_keys and e.dst_key[0] not in expanded:
+                        collapsed.add(e.dst_key[0])
+                    if e.dst_key in exp_keys and e.src_key[0] not in expanded:
+                        collapsed.add(e.src_key[0])
+                collapsed -= unresolved
+                neigh = filter_system(full, collapsed, set(), set()).devices if collapsed else []
+                view = System(name=full.name, devices=exp_view.devices + neigh, display_names=full.display_names)
+            view = collapse_system(view, collapsed, edges, focus=focus)
+            redges = classify_edges(edges, port_keys_for(view), collapsed, unresolved)
+            laid_out, reversed_edges = layout(emit_elk_spec(view, redges, collapsed))
+            return laid_out, view, redges, collapsed, reversed_edges
 
-    full_index = full.by_interface()
-    full_parsed_subs = {d.subsystem for d in full.devices}
+        def compute_trace(
+            device: str | None = None, component: str | None = None, iface_key: tuple[str, str] | None = None
+        ):
+            """Flow-trace view for a device, component, or single interface; None if
+            no flows touch it."""
+            parsed_subs = {d.subsystem for d in full.devices}
+            traced, tedges = trace_flows(
+                flows, full, device, component, parsed_subs, iface_key=iface_key, token_links=token_links
+            )
+            if not traced:
+                return None
+            view = chain_view(full, tedges)
+            redges = classify_edges(tedges, port_keys_for(view), set(), unresolved)
+            laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
+            return laid_out, view, redges, set(), reversed_edges
 
-    def compute_aggregate(agg_flows):
-        """Aggregate view: every flow a multi-flow token represents, drawn
-        together. Its own labels link to the same full-graph diagrams (via
-        token_links), so they stay clickable too."""
-        aedges = derive_edges(agg_flows, full, token_links=token_links)
-        if not aedges:
-            return None
-        view = chain_view(full, aedges)
-        redges = classify_edges(aedges, port_keys_for(view), set(), unresolved)
-        laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
-        return laid_out, view, redges, set(), reversed_edges
+        full_index = full.by_interface()
+        full_parsed_subs = {d.subsystem for d in full.devices}
 
-    def compute_path(flow):
-        """Path view: one flow's end-to-end chain. None if it can't be drawn."""
-        chain = _resolve_chain(flow, full_index, full_parsed_subs)
-        if chain is None:
-            return None
-        pedges = single_flow_edges(flow, chain, full_index)
-        if not pedges:
-            return None
-        view = chain_view(full, pedges)
-        redges = classify_edges(pedges, port_keys_for(view), set(), unresolved)
-        laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
-        return laid_out, view, redges, set(), reversed_edges
+        def compute_aggregate(agg_flows):
+            """Aggregate view: every flow a multi-flow token represents, drawn
+            together. Its own labels link to the same full-graph diagrams (via
+            token_links), so they stay clickable too."""
+            aedges = derive_edges(agg_flows, full, token_links=token_links)
+            if not aedges:
+                return None
+            view = chain_view(full, aedges)
+            redges = classify_edges(aedges, port_keys_for(view), set(), unresolved)
+            laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
+            return laid_out, view, redges, set(), reversed_edges
 
-    # Each task renders one diagram to <stem>.svg. The diagram's placement in
-    # the docs is NOT written here — it's derived at build time from the file
-    # name + the doc's heading structure (hooks.py). The stems below are the
-    # naming contract; planned_stems() re-expresses it for the derivation guard.
-    tasks: list = []
+        def compute_path(flow):
+            """Path view: one flow's end-to-end chain. None if it can't be drawn."""
+            chain = _resolve_chain(flow, full_index, full_parsed_subs)
+            if chain is None:
+                return None
+            pedges = single_flow_edges(flow, chain, full_index)
+            if not pedges:
+                return None
+            view = chain_view(full, pedges)
+            redges = classify_edges(pedges, port_keys_for(view), set(), unresolved)
+            laid_out, reversed_edges = layout(emit_elk_spec(view, redges))
+            return laid_out, view, redges, set(), reversed_edges
 
-    # 1. System diagram (all subsystems collapsed) → inlined on the landing page.
-    tasks.append(lambda: emit(*compute_subsystem(set(), all_collapsed=True), embed.qualified_name(system_name)))
+        # Each task renders one diagram to <stem>.svg. The diagram's placement in
+        # the docs is NOT written here — it's derived at build time from the file
+        # name + the doc's heading structure (hooks.py). The stems below are the
+        # naming contract; planned_stems() re-expresses it for the derivation guard.
+        tasks: list = []
 
-    # 2. One subsystem diagram per subsystem (that subsystem expanded).
-    for sub in sorted(s for s in all_subs if s not in unresolved):
+        # 1. System diagram (all subsystems collapsed) → inlined on the landing page.
+        tasks.append(lambda: emit(*compute_subsystem(set(), all_collapsed=True), embed.qualified_name(system_name)))
 
-        def _sub_task(sub=sub):
-            emit(*compute_subsystem({sub}, all_collapsed=False), embed.qualified_name(sub))
+        # 2. One subsystem diagram per subsystem (that subsystem expanded).
+        for sub in sorted(s for s in subs if s not in unresolved):
 
-        tasks.append(_sub_task)
+            def _sub_task(sub=sub):
+                emit(*compute_subsystem({sub}, all_collapsed=False), embed.qualified_name(sub))
 
-    # 3. One device diagram per device (flow trace).
-    for d in full.devices:
-        if d.subsystem in unresolved:
-            continue
+            tasks.append(_sub_task)
 
-        def _device_task(d=d):
-            res = compute_trace(d.name, None)
-            if res is None:
-                print(f"note: no flows touch device {d.name}; skipped", file=sys.stderr)
-                return
-            emit(*res, embed.qualified_name(d.subsystem, d.name), link_subs={dd.subsystem for dd in res[1].devices})
+        # 3. One device diagram per device (flow trace).
+        for d in full.devices:
+            if d.subsystem in unresolved:
+                continue
 
-        tasks.append(_device_task)
-
-    # 4. One component diagram per component (flow trace). Qualified to the owning
-    # device, so a component name shared by two devices (e.g. sshd on both SOMs)
-    # renders separately rather than merging by name.
-    for d in full.devices:
-        if d.subsystem in unresolved:
-            continue
-        for c in d.components:
-
-            def _comp_task(d=d, c=c):
-                res = compute_trace(d.name, c.name)
+            def _device_task(d=d):
+                res = compute_trace(d.name, None)
                 if res is None:
-                    print(f"note: no flows touch component {d.name} > {c.name}; skipped", file=sys.stderr)
+                    print(f"note: no flows touch device {d.name}; skipped", file=sys.stderr)
                     return
-                emit(
-                    *res,
-                    embed.qualified_name(d.subsystem, d.name, c.name),
-                    link_subs={dd.subsystem for dd in res[1].devices},
-                )
+                emit(*res, embed.qualified_name(d.subsystem, d.name), link_subs={dd.subsystem for dd in res[1].devices})
 
-            tasks.append(_comp_task)
+            tasks.append(_device_task)
 
-    # 5. One path diagram per flow (its end-to-end chain).
-    for fl in flows:
-        if fl.subsystem in unresolved:
-            continue
+        # 4. One component diagram per component (flow trace). Qualified to the owning
+        # device, so a component name shared by two devices (e.g. sshd on both SOMs)
+        # renders separately rather than merging by name.
+        for d in full.devices:
+            if d.subsystem in unresolved:
+                continue
+            for c in d.components:
 
-        def _flow_task(fl=fl):
-            res = compute_path(fl)
-            if res is None:
-                print(
-                    f"note: flow '{_flow_name(fl)}' on '{_fmt_key(fl.source)}' has no drawable path; skipped",
-                    file=sys.stderr,
-                )
-                return
-            stem = _flow_stem(fl)
-            emit(*res, stem, link_subs={dd.subsystem for dd in res[1].devices})
+                def _comp_task(d=d, c=c):
+                    res = compute_trace(d.name, c.name)
+                    if res is None:
+                        print(f"note: no flows touch component {d.name} > {c.name}; skipped", file=sys.stderr)
+                        return
+                    emit(
+                        *res,
+                        embed.qualified_name(d.subsystem, d.name, c.name),
+                        link_subs={dd.subsystem for dd in res[1].devices},
+                    )
 
-        tasks.append(_flow_task)
+                tasks.append(_comp_task)
 
-    # 6. One diagram per interface (flow trace through that single interface).
-    # Iterate CANONICAL interfaces off full.devices — not by_interface(), which
-    # carries several key spellings per interface and would render each one
-    # multiple times. _heading_for matches the resolved-chain keys trace_flows sees.
-    for d in full.devices:
-        if d.subsystem in unresolved:
-            continue
-        ifaces = [(None, i) for i in d.interfaces] + [(c, i) for c in d.components for i in c.interfaces]
-        for comp, iface in ifaces:
+        # 5. One path diagram per flow (its end-to-end chain).
+        for fl in flows:
+            if fl.subsystem in unresolved:
+                continue
 
-            def _iface_task(d=d, comp=comp, iface=iface):
-                heading = _heading_for(d, comp, iface)
-                res = compute_trace(iface_key=(d.subsystem, heading))
+            def _flow_task(fl=fl):
+                res = compute_path(fl)
                 if res is None:
-                    print(f"note: no flows pass through interface {d.subsystem} > {heading}; skipped", file=sys.stderr)
+                    print(
+                        f"note: flow '{_flow_name(fl)}' on '{_fmt_key(fl.source)}' has no drawable path; skipped",
+                        file=sys.stderr,
+                    )
                     return
-                emit(
-                    *res,
-                    embed.qualified_name(d.subsystem, *heading.split(" > ")),
-                    link_subs={dd.subsystem for dd in res[1].devices},
-                )
+                stem = _flow_stem(fl)
+                emit(*res, stem, link_subs={dd.subsystem for dd in res[1].devices})
 
-            tasks.append(_iface_task)
+            tasks.append(_flow_task)
 
-    # 7. One aggregate diagram per multi-flow token — the flows it represents,
-    # drawn together. Referenced only from those edge labels (no doc placement).
-    for agg_stem, agg_flows in aggregates.items():
+        # 6. One diagram per interface (flow trace through that single interface).
+        # Iterate CANONICAL interfaces off full.devices — not by_interface(), which
+        # carries several key spellings per interface and would render each one
+        # multiple times. _heading_for matches the resolved-chain keys trace_flows sees.
+        for d in full.devices:
+            if d.subsystem in unresolved:
+                continue
+            ifaces = [(None, i) for i in d.interfaces] + [(c, i) for c in d.components for i in c.interfaces]
+            for comp, iface in ifaces:
 
-        def _agg_task(stem=agg_stem, fl=agg_flows):
-            res = compute_aggregate(fl)
-            if res is None:
-                print(f"note: aggregate '{stem}' has no drawable path; skipped", file=sys.stderr)
-                return
-            emit(*res, stem, link_subs={dd.subsystem for dd in res[1].devices})
+                def _iface_task(d=d, comp=comp, iface=iface):
+                    heading = _heading_for(d, comp, iface)
+                    res = compute_trace(iface_key=(d.subsystem, heading))
+                    if res is None:
+                        print(f"note: no flows pass through interface {d.subsystem} > {heading}; skipped", file=sys.stderr)
+                        return
+                    emit(
+                        *res,
+                        embed.qualified_name(d.subsystem, *heading.split(" > ")),
+                        link_subs={dd.subsystem for dd in res[1].devices},
+                    )
 
-        tasks.append(_agg_task)
+                tasks.append(_iface_task)
+
+        # 7. One aggregate diagram per multi-flow token — the flows it represents,
+        # drawn together. Referenced only from those edge labels (no doc placement).
+        for agg_stem, agg_flows in aggregates.items():
+
+            def _agg_task(stem=agg_stem, fl=agg_flows):
+                res = compute_aggregate(fl)
+                if res is None:
+                    print(f"note: aggregate '{stem}' has no drawable path; skipped", file=sys.stderr)
+                    return
+                emit(*res, stem, link_subs={dd.subsystem for dd in res[1].devices})
+
+            tasks.append(_agg_task)
+
+        return tasks
+
+    tasks = view_tasks(full, flows, out_dir)
+    # Each target the landing page declares gets its own view in
+    # <out>/<target>/, drawn from the flows that belong to it and over only the
+    # boxes they reach: every interface on their resolved chains. Only flows
+    # whose chain resolves in the whole system go in: in the cut-down system a
+    # dangling waypoint could read as an external stub instead of dropping the flow.
+    index, parsed_subs = full.by_interface(), {d.subsystem for d in full.devices}
+    resolved = [f for f in flows if _resolve_chain(f, index, parsed_subs)]
+    for target in targets:
+        t_flows = target_flows(resolved, target)
+        keys = {key for f in t_flows for key, _dev in _resolve_chain(f, index, parsed_subs)}
+        tasks += view_tasks(reached_view(full, keys), t_flows, out_dir / target)
 
     # Render every diagram across the worker pool. A thread blocked on a node
     # round-trip releases the GIL, so the pool's workers stay saturated. Tasks

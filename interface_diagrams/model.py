@@ -16,6 +16,7 @@ class Flow:
     source: tuple[str, str]
     label: str | None = None
     waypoints: list[InterfaceRef] = field(default_factory=list)
+    targets: tuple[str, ...] = ()  # the target tag's entries; empty means every target
 
 
 @dataclass

@@ -188,10 +188,11 @@ wheels = [
 
 [[package]]
 name = "mkdocs-interface-diagrams"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pillow" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -210,6 +211,7 @@ dev = [
 requires-dist = [
     { name = "mkdocs", marker = "extra == 'mkdocs'", specifier = ">=1.6" },
     { name = "pillow", specifier = ">=10.0" },
+    { name = "pyyaml", specifier = ">=5.1" },
 ]
 provides-extras = ["mkdocs"]
 

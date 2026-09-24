@@ -13,7 +13,13 @@ plus that filename convention, where every diagram belongs. Then per page it:
     that opens it in the lightbox — collapsing the title onto the link — and
     rewrites each interface (port) label's href to its interface heading;
   * turns each `[[...]]` flow waypoint into a link to the referenced
-    interface's heading.
+    interface's heading, and each `[[target:<name>]]` into the lightbox link
+    that opens that target's view at its system diagram.
+
+A target's view (assets/diagrams/<section>/<target>/) is reached only in the
+lightbox: its box and port links open the target's own diagrams, and each
+diagram carries the all-targets section it belongs to, where closing the
+lightbox lands.
 
 The placement derivation here is the mirror of the tool's diagram naming
 (generate.py builds the same slugs from its parsed model); test_derivation.py
@@ -27,6 +33,7 @@ import posixpath
 import re
 from pathlib import Path
 
+from mkdocs.exceptions import PluginError
 from mkdocs.utils import get_relative_url as _get_relative_url
 
 # The diagram tool owns the slug contract (qualified_name) and the system
@@ -34,6 +41,7 @@ from mkdocs.utils import get_relative_url as _get_relative_url
 # rendering use the exact same naming the generator does — one source of truth.
 from interface_diagrams import manifest
 from interface_diagrams.embed import qualified_name
+from interface_diagrams.parse import TAG_RE
 
 _WIKILINK = re.compile(r"(?<!!)\[\[([^\]]+?)\]\]")
 _SVG_HREF = re.compile(r'(href|xlink:href)="([^"/]+?\.svg)"')
@@ -55,26 +63,29 @@ _LANDING_STEM = "index"
 #                      resolve through this); docs-relative path -> the doc's H1
 #                      title (the subsystem label shown in waypoints, not its
 #                      filename); docs-relative path of the system diagram;
-#                      section -> set of existing diagram stems.
+#                      section -> set of existing diagram stems; flow diagram
+#                      stem -> (doc, anchor of the heading above its label).
 _DIAGRAMS = None
 _PATHS = None
 _DOCS = None
 _TITLES = None
 _SYSTEM_SVG = {}  # section -> docs-relative path of its system svg
 _SECTION_STEMS = None
+_FLOW_SECTIONS = None
 
 
 def _reset_caches() -> None:
     """Reset all per-build scan caches.  Call once at the start of each build
     (plugin.on_config) so that a doc rename during ``mkdocs serve`` is picked up
     on the next rebuild rather than serving stale placement data."""
-    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS
+    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS, _FLOW_SECTIONS
     _DIAGRAMS = None
     _PATHS = None
     _DOCS = None
     _TITLES = None
     _SYSTEM_SVG = {}
     _SECTION_STEMS = None
+    _FLOW_SECTIONS = None
 
 
 def _doc_path(name: str, section: str = "") -> str:
@@ -221,10 +232,11 @@ def _anchor(disp, used):
 def _scan(docs_dir: str):
     """One ordered pass per doc: compute each heading's exact anchor and, from
     the heading structure + filename convention, where each diagram belongs."""
-    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS
+    global _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SYSTEM_SVG, _SECTION_STEMS, _FLOW_SECTIONS
     if _DIAGRAMS is not None:
         return _DIAGRAMS, _PATHS
     _DIAGRAMS, _PATHS, _DOCS, _TITLES, _SECTION_STEMS, _SYSTEM_SVG = {}, {}, {}, {}, {}, {}
+    _FLOW_SECTIONS = {}
     for root, _dirs, fnames in os.walk(docs_dir):
         for fn in sorted(fnames):
             if not fn.endswith(".md"):
@@ -236,10 +248,11 @@ def _scan(docs_dir: str):
             with open(os.path.join(root, fn), encoding="utf-8") as fh:
                 lines = fh.read().split("\n")
             used = set()
+            above = None  # anchor of the last heading: a flow's section
             for rec in _walk(lines, doc_stem):
                 if rec[0] == "heading":
                     _, _i, _level, _text, disp, slug, paths = rec
-                    anchor = _anchor(disp, used)
+                    anchor = above = _anchor(disp, used)
                     if _level == 1:
                         _TITLES.setdefault(doc, disp)  # subsystem label
                     for p in paths:
@@ -254,6 +267,9 @@ def _scan(docs_dir: str):
                         # link opens the flow's diagram in the lightbox without
                         # navigating, so an unplaced (doc, None) entry suffices.
                         _DIAGRAMS.setdefault((_section_of(doc), slug), (doc, None))
+                        # Its section is the payload heading above its label,
+                        # where closing the lightbox on a target's view of it lands.
+                        _FLOW_SECTIONS.setdefault((_section_of(doc), slug), (doc, above))
             # The system overview is inlined on the landing page; it owns no
             # heading, so record it explicitly and remember its path so pages can
             # link "home" to it (diagram-lightbox.js).
@@ -299,7 +315,9 @@ def _read_svg(docs_dir: str, relpath: str):
 _FILES = None
 
 
-def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, diagrams: dict, section: str = "") -> str:
+def _fix_standalone_svg(
+    svg: str, svg_url: str, doc_urls: dict, paths: dict, diagrams: dict, section: str = "", in_view: bool = False
+) -> str:
     """Rewrite a raw diagram SVG's links so they work when the .svg is opened
     directly (the "Open diagram" target), not just when inlined — all relative to
     the SVG's own served location (`svg_url`):
@@ -311,7 +329,11 @@ def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, dia
         opens it like an interface link. A title whose diagram isn't placed
         anywhere (e.g. a cross-referenced subsystem not in the data-flows folder)
         has no section, so it's left as the .svg and the lightbox opens it
-        directly."""
+        directly.
+
+    In a target's view (`in_view`) every title stays its .svg and every port
+    links the target's own interface diagram, so the lightbox opens the
+    target's diagram of that box or interface in place."""
 
     def _section_url(loc):
         doc, anchor = loc
@@ -336,8 +358,24 @@ def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, dia
         u = _section_url(loc) if (loc and loc[1] is not None) else None
         return f'{attr}="{u}"' if u else hm.group(0)
 
-    svg = _SVG_DOC_HREF.sub(iface, svg)
-    svg = _SVG_HREF.sub(title, svg)
+    def view_iface(hm):
+        # In a target's view a port opens the target's own diagram of that
+        # interface, which sits beside this one under the generator's naming.
+        attr, doc = hm.group(1), _doc_path(hm.group(2), section)
+        if doc not in doc_urls:
+            return hm.group(0)
+        path = _norm_path(html.unescape(hm.group(3)))
+        return f'{attr}="{qualified_name(posixpath.basename(doc)[:-3], *path.split(" > "))}.svg"'
+
+    if not in_view:
+        return _SVG_HREF.sub(title, _SVG_DOC_HREF.sub(iface, svg))
+    svg = _SVG_DOC_HREF.sub(view_iface, svg)
+    # Closing the lightbox on a target's diagram lands on the all-targets
+    # section of the same diagram (diagram-lightbox.js), so stamp it on the root.
+    loc = diagrams.get((section, posixpath.basename(svg_url)[:-4]))
+    u = _section_url(loc) if loc else None
+    if u:
+        svg = svg.replace("<svg", f'<svg data-section="{html.escape(u, quote=True)}"', 1)
     return svg
 
 
@@ -348,6 +386,9 @@ def fix_built_svgs(config):
     if _FILES is None:
         return
     _diagrams, paths = _scan(config["docs_dir"])
+    # A target's diagram carries the all-targets section it belongs to; for a
+    # flow that is the payload heading above its label.
+    view_sections = {**_diagrams, **_FLOW_SECTIONS}
     doc_urls = {f.src_path.replace(os.sep, "/"): f.url for f in _FILES if f.src_path.endswith(".md")}
     for f in _FILES:
         if not f.src_path.endswith(".svg"):
@@ -358,7 +399,9 @@ def fix_built_svgs(config):
         svg = open(dest, encoding="utf-8").read()
         parts = f.src_path.replace(os.sep, "/").split("/")
         sec = parts[2] if parts[:2] == ["assets", "diagrams"] and len(parts) > 3 else ""
-        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, _diagrams, sec)
+        # assets/diagrams/<section>/<target>/<stem>.svg is a diagram of a target's view.
+        in_view = parts[:2] == ["assets", "diagrams"] and len(parts) == 5
+        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, view_sections if in_view else _diagrams, sec, in_view)
         if fixed != svg:
             with open(dest, "w", encoding="utf-8") as fh:
                 fh.write(fixed)
@@ -458,6 +501,7 @@ def apply_page_markdown(markdown, page, config, files):
                 actions[idx] = ("flow", label, slug)
 
     out = []
+    tag_lines = set()  # a flow's target tag line, under which the list needs a blank line too
     for idx, line in enumerate(lines):
         act = actions.get(idx)
         if act and act[0] == "heading":
@@ -472,8 +516,14 @@ def apply_page_markdown(markdown, page, config, files):
             # the blank line it needs.
             if idx + 1 < len(lines) and lines[idx + 1].strip():
                 out.append("")
+            # A target tag sits between the label and the list; the list then
+            # abuts the tag line instead.
+            if idx + 1 < len(lines) and TAG_RE.match(lines[idx + 1].strip()):
+                tag_lines.add(idx + 1)
         else:
             out.append(line)
+            if idx in tag_lines and idx + 1 < len(lines) and lines[idx + 1].strip():
+                out.append("")
         if idx == inline_after:
             out.append(inline_system())
     markdown = "\n".join(out)
@@ -481,6 +531,13 @@ def apply_page_markdown(markdown, page, config, files):
     def sub_wikilink(m):
         target = m.group(1).split("|", 1)[0]
         alias = m.group(1).split("|", 1)[1] if "|" in m.group(1) else None
+        if target.startswith("target:"):
+            # `[[target:<name>]]` opens that target's view in the lightbox, at
+            # its system diagram (assets/diagrams/<section>/<name>/).
+            name = target[len("target:"):].strip()
+            if name not in manifest.landing_targets(Path(docs_dir, _section_of(here), "index.md")):
+                raise PluginError(f"{here}: [[target:{name}]] names no target that the section's index.md declares")
+            return diagram_link(f"{name}/{_system_slug(docs_dir, here)}", alias or name)
         docpart, _, path = target.partition("#")
         docpart, path = docpart.strip(), _norm_path(path)
         doc = _doc_path(docpart, _section_of(here)) if docpart else here

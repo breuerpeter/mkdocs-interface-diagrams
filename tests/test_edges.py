@@ -2,6 +2,7 @@
 per-diagram edge classification, and the view filters."""
 
 import unittest
+from dataclasses import replace
 from typing import ClassVar
 
 from interface_diagrams import embed
@@ -20,8 +21,11 @@ from interface_diagrams.generate import (
     filter_system,
     merge_labels,
     port_keys_for,
+    reached_view,
     single_flow_edges,
+    target_flows,
     trace_flows,
+    unmatched_tags,
 )
 
 from .helpers import PipelineTestCase, make_flow, make_system
@@ -287,6 +291,18 @@ class EdgeLabelTokens(PipelineTestCase):
         self.assertTrue(all(e.tokens == () for e in edges))
 
 
+class UnmatchedTags(unittest.TestCase):
+    def test_a_tag_entry_that_matches_no_declared_target_is_reported_with_its_flow(self):
+        flows = [
+            replace(make_flow(label="a"), targets=("x_1", "x_9")),
+            replace(make_flow(label="b"), targets=("y_*",)),
+            replace(make_flow(label="c"), targets=("x_*",)),
+            make_flow(label="d"),
+        ]
+        found = [(f.label, entry) for f, entry in unmatched_tags(flows, ["x_1", "x_2"])]
+        self.assertEqual(found, [("a", "x_9"), ("b", "y_*")])
+
+
 class DrawableFlowStems(PipelineTestCase):
     """The set of stems whose path diagram actually gets emitted — what an
     edge-label link may point at. Mirrors the flow-render task's skip rules."""
@@ -390,6 +406,20 @@ class Views(PipelineTestCase):
         deva = next(d for d in view.devices if d.name == "DevA")
         self.assertEqual([i.name for i in deva.interfaces], ["eth0"])
         self.assertEqual(deva.components, [])  # udp:1 not an endpoint
+
+    def test_reached_view_keeps_only_the_boxes_the_keys_reach(self):
+        view = reached_view(self.sys, {("SubA", "DevA > proc > udp:1"), ("SubB", "DevB > eth0")})
+        boxes = {(d.name, tuple(i.name for i in d.interfaces), tuple(c.name for c in d.components)) for d in view.devices}
+        self.assertEqual(boxes, {("DevA", (), ("proc",)), ("DevB", ("eth0",), ())})
+
+    def test_a_target_takes_its_tagged_flows_and_every_untagged_one(self):
+        flows = [
+            replace(make_flow(label="a"), targets=("x_1",)),
+            replace(make_flow(label="b"), targets=("x_2",)),
+            make_flow(label="c"),
+            replace(make_flow(label="d"), targets=("y_1", "x_*")),
+        ]
+        self.assertEqual([f.label for f in target_flows(flows, "x_1")], ["a", "c", "d"])
 
     def test_filter_system_by_subsystem(self):
         view = filter_system(self.sys, {"SubB"}, set(), set())

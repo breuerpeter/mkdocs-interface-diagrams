@@ -6,6 +6,7 @@ from importlib.resources import files as _res
 from pathlib import Path
 
 from mkdocs.config import config_options as c
+from mkdocs.exceptions import PluginError
 from mkdocs.plugins import BasePlugin
 from mkdocs.structure.files import File
 
@@ -56,7 +57,10 @@ class DiagramsPlugin(BasePlugin):
             key = cache.job_key(section, extra)
             if self.config["cache"] and cache.is_fresh(out_dir, key):
                 continue
-            generate_section(section, out_dir, check=False)
+            # 1: the docs have an error that stops the build (a bad target
+            # declaration, or a tag entry no declared target matches), printed above.
+            if generate_section(section, out_dir, check=False) == 1:
+                raise PluginError(f"interface-diagrams: {section} has errors, listed above")
             cache.write(out_dir, key)
 
     def on_files(self, files, config):
