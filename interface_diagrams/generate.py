@@ -66,6 +66,7 @@ from interface_diagrams.edges import (
     drawable_flow_stems,
     port_keys_for,
     classify_edges,
+    unmatched_tags,
 )
 
 
@@ -253,7 +254,10 @@ def planned_stems(doc_paths: list[Path]) -> set[str]:
 
 
 def generate_section(section: Path, out: Path, check: bool = False) -> int:
-    """Generate (or, with check=True, only validate) one system folder. Returns exit code."""
+    """Generate (or, with check=True, only validate) one system folder. Returns
+    the exit code: 0 done; 1 the docs have errors (with check=True any
+    validation issue; when generating, a target tag entry that matches no
+    declared target, which stops the build); 2 a setup error."""
     import interface_diagrams.edges as _edges_mod
     _edges_mod._VALIDATION_WARNINGS = 0
     _edges_mod._VALIDATION_SOFT_WARNINGS = 0
@@ -276,14 +280,19 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
     full, flows, parsed_docs, unresolved = parse_closure(doc_paths)
     all_subs = sorted({d.subsystem for d in full.devices})
     targets = manifest.landing_targets(overview)
+    tag_errors = unmatched_tags(flows, targets)
+    for f, entry in tag_errors:
+        print(
+            f"error: flow '{_flow_name(f)}' on '{_fmt_key(f.source)}': tag entry `{entry}` matches no "
+            f"target that {overview} declares ({', '.join(targets) or 'none'})",
+            file=sys.stderr,
+        )
 
     if check:
         derive_edges(flows, full)
-        if _edges_mod._VALIDATION_WARNINGS:
-            print(
-                f"check failed: {_edges_mod._VALIDATION_WARNINGS} issue(s) across {len(parsed_docs)} parsed doc(s)",
-                file=sys.stderr,
-            )
+        issues = _edges_mod._VALIDATION_WARNINGS + len(tag_errors)
+        if issues:
+            print(f"check failed: {issues} issue(s) across {len(parsed_docs)} parsed doc(s)", file=sys.stderr)
             return 1
         advisory = (
             f" ({_edges_mod._VALIDATION_SOFT_WARNINGS} advisory warning(s))"
@@ -292,6 +301,8 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
         )
         print(f"check passed: {len(parsed_docs)} doc(s), {len(flows)} flows{advisory}", file=sys.stderr)
         return 0
+    if tag_errors:
+        return 1
 
     # Newton fork: a single STABLE output folder (not dated) so re-rendering is
     # idempotent — embeds always point at "diagrams/…", and unchanged docs

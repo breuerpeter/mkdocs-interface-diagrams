@@ -25,6 +25,7 @@ from interface_diagrams.generate import (
     single_flow_edges,
     target_flows,
     trace_flows,
+    unmatched_tags,
 )
 
 from .helpers import PipelineTestCase, make_flow, make_system
@@ -288,6 +289,18 @@ class EdgeLabelTokens(PipelineTestCase):
         edges = single_flow_edges(f, chain, index)
         self.assertTrue(edges)
         self.assertTrue(all(e.tokens == () for e in edges))
+
+
+class UnmatchedTags(unittest.TestCase):
+    def test_a_tag_entry_that_matches_no_declared_target_is_reported_with_its_flow(self):
+        flows = [
+            replace(make_flow(label="a"), targets=("x_1", "x_9")),
+            replace(make_flow(label="b"), targets=("y_*",)),
+            replace(make_flow(label="c"), targets=("x_*",)),
+            make_flow(label="d"),
+        ]
+        found = [(f.label, entry) for f, entry in unmatched_tags(flows, ["x_1", "x_2"])]
+        self.assertEqual(found, [("a", "x_9"), ("b", "y_*")])
 
 
 class DrawableFlowStems(PipelineTestCase):

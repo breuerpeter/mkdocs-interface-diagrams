@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import sys
+from fnmatch import fnmatchcase
 
 from interface_diagrams import embed
 from interface_diagrams.model import (
@@ -374,6 +375,12 @@ def aggregate_diagrams(flows: list[Flow], sys_: System) -> dict[str, list[Flow]]
                 by_stem.values(), key=lambda f: (f.subsystem, f.source, f.payload, f.label or "")
             )
     return aggs
+
+
+def unmatched_tags(flows: list[Flow], declared: list[str]) -> list[tuple[Flow, str]]:
+    """Every target tag entry (a name or a glob) that matches none of the
+    declared targets, with its flow. Each one stops the build."""
+    return [(f, e) for f in flows for e in f.targets if not any(fnmatchcase(t, e) for t in declared)]
 
 
 def drawable_flow_stems(flows: list[Flow], sys_: System, unresolved: set[str]) -> set[str]:
