@@ -35,6 +35,7 @@ from mkdocs.utils import get_relative_url as _get_relative_url
 # rendering use the exact same naming the generator does — one source of truth.
 from interface_diagrams import manifest
 from interface_diagrams.embed import qualified_name
+from interface_diagrams.parse import TAG_RE
 
 _WIKILINK = re.compile(r"(?<!!)\[\[([^\]]+?)\]\]")
 _SVG_HREF = re.compile(r'(href|xlink:href)="([^"/]+?\.svg)"')
@@ -471,6 +472,7 @@ def apply_page_markdown(markdown, page, config, files):
                 actions[idx] = ("flow", label, slug)
 
     out = []
+    tag_lines = set()  # a flow's target tag line, under which the list needs a blank line too
     for idx, line in enumerate(lines):
         act = actions.get(idx)
         if act and act[0] == "heading":
@@ -485,8 +487,14 @@ def apply_page_markdown(markdown, page, config, files):
             # the blank line it needs.
             if idx + 1 < len(lines) and lines[idx + 1].strip():
                 out.append("")
+            # A target tag sits between the label and the list; the list then
+            # abuts the tag line instead.
+            if idx + 1 < len(lines) and TAG_RE.match(lines[idx + 1].strip()):
+                tag_lines.add(idx + 1)
         else:
             out.append(line)
+            if idx in tag_lines and idx + 1 < len(lines) and lines[idx + 1].strip():
+                out.append("")
         if idx == inline_after:
             out.append(inline_system())
     markdown = "\n".join(out)
