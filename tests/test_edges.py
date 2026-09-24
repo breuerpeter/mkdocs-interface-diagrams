@@ -2,6 +2,7 @@
 per-diagram edge classification, and the view filters."""
 
 import unittest
+from dataclasses import replace
 from typing import ClassVar
 
 from interface_diagrams import embed
@@ -21,6 +22,7 @@ from interface_diagrams.generate import (
     merge_labels,
     port_keys_for,
     single_flow_edges,
+    target_flows,
     trace_flows,
 )
 
@@ -390,6 +392,15 @@ class Views(PipelineTestCase):
         deva = next(d for d in view.devices if d.name == "DevA")
         self.assertEqual([i.name for i in deva.interfaces], ["eth0"])
         self.assertEqual(deva.components, [])  # udp:1 not an endpoint
+
+    def test_a_target_takes_its_tagged_flows_and_every_untagged_one(self):
+        flows = [
+            replace(make_flow(label="a"), targets=("x_1",)),
+            replace(make_flow(label="b"), targets=("x_2",)),
+            make_flow(label="c"),
+            replace(make_flow(label="d"), targets=("y_1", "x_*")),
+        ]
+        self.assertEqual([f.label for f in target_flows(flows, "x_1")], ["a", "c", "d"])
 
     def test_filter_system_by_subsystem(self):
         view = filter_system(self.sys, {"SubB"}, set(), set())

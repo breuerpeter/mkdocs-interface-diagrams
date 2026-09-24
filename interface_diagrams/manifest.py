@@ -8,6 +8,8 @@ there is no manifest file.
 The system's display name is declared in the landing page's YAML frontmatter
 (`system: <Name>`) — so adding a new system diagram is just a new folder with an
 `index.md` carrying that key (e.g. `system: Simulation System`). It is required.
+The same frontmatter may declare the section's targets (`targets: [x_1, x_2]`),
+the names a flow's target tag may match; each target gets its own view.
 """
 
 from __future__ import annotations
@@ -15,12 +17,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-_SYSTEM_FM = re.compile(r"^\s*system\s*:\s*(.+?)\s*$")
 
-
-def landing_system_name(path: Path) -> str | None:
-    """The `system:` name from a doc's YAML frontmatter, or None. A page
-    carrying this key is the system landing/overview page."""
+def _frontmatter_field(path: Path, key: str) -> str | None:
+    """The raw value of `<key>:` in a doc's YAML frontmatter, or None."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
@@ -31,10 +30,26 @@ def landing_system_name(path: Path) -> str | None:
     if end == -1:
         return None
     for line in text[3:end].splitlines():
-        m = _SYSTEM_FM.match(line)
+        m = re.match(rf"^\s*{key}\s*:\s*(.+?)\s*$", line)
         if m:
-            return m.group(1).strip().strip("\"'")
+            return m.group(1)
     return None
+
+
+def landing_system_name(path: Path) -> str | None:
+    """The `system:` name from a doc's YAML frontmatter, or None. A page
+    carrying this key is the system landing/overview page."""
+    name = _frontmatter_field(path, "system")
+    return name.strip().strip("\"'") if name else None
+
+
+def landing_targets(path: Path) -> list[str]:
+    """The `targets:` names from a landing page's frontmatter, written as a YAML
+    flow sequence (`targets: [x_1, x_2]`); [] when the page declares none."""
+    value = _frontmatter_field(path, "targets")
+    if not value:
+        return []
+    return [t.strip().strip("\"'") for t in value.strip("[]").split(",") if t.strip()]
 
 
 def system_name(folder: Path) -> str:
