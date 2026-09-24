@@ -320,8 +320,11 @@ def _fix_standalone_svg(
         opens it like an interface link. A title whose diagram isn't placed
         anywhere (e.g. a cross-referenced subsystem not in the data-flows folder)
         has no section, so it's left as the .svg and the lightbox opens it
-        directly. In a target's view (`in_view`) every title stays its .svg, so
-        the lightbox opens the target's own diagram of that box in place."""
+        directly.
+
+    In a target's view (`in_view`) every title stays its .svg and every port
+    links the target's own interface diagram, so the lightbox opens the
+    target's diagram of that box or interface in place."""
 
     def _section_url(loc):
         doc, anchor = loc
@@ -346,9 +349,18 @@ def _fix_standalone_svg(
         u = _section_url(loc) if (loc and loc[1] is not None) else None
         return f'{attr}="{u}"' if u else hm.group(0)
 
-    svg = _SVG_DOC_HREF.sub(iface, svg)
+    def view_iface(hm):
+        # In a target's view a port opens the target's own diagram of that
+        # interface, which sits beside this one under the generator's naming.
+        attr, doc = hm.group(1), _doc_path(hm.group(2), section)
+        if doc not in doc_urls:
+            return hm.group(0)
+        path = _norm_path(html.unescape(hm.group(3)))
+        return f'{attr}="{qualified_name(posixpath.basename(doc)[:-3], *path.split(" > "))}.svg"'
+
     if not in_view:
-        return _SVG_HREF.sub(title, svg)
+        return _SVG_HREF.sub(title, _SVG_DOC_HREF.sub(iface, svg))
+    svg = _SVG_DOC_HREF.sub(view_iface, svg)
     # Closing the lightbox on a target's diagram lands on the all-targets
     # section of the same diagram (diagram-lightbox.js), so stamp it on the root.
     loc = diagrams.get((section, posixpath.basename(svg_url)[:-4]))

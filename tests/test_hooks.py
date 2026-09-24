@@ -187,6 +187,11 @@ class FixStandaloneSvg(unittest.TestCase):
         out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
         self.assertIn('href="skynode-fmu_nuttx.svg"', out)
 
+    def test_port_href_in_a_targets_view_opens_the_targets_interface_diagram(self):
+        # The target's own diagram of that interface sits beside this one.
+        out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('href="skynode-fmu_nuttx-uart_dev_ttys4.svg"', out)
+
     def test_a_targets_view_diagram_carries_its_all_targets_section(self):
         # Closing the lightbox on this diagram lands on that section (diagram-lightbox.js).
         svg_url = "diagrams/x_1/skynode-fmu_nuttx.svg"
