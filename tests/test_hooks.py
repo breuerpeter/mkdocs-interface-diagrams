@@ -181,6 +181,12 @@ class FixStandaloneSvg(unittest.TestCase):
         # An embedded diagram's title link -> the section that embeds it.
         self.assertIn('href="../skynode/#fmu-nuttx"', fix(SVG))
 
+    def test_title_href_in_a_targets_view_stays_its_svg(self):
+        # A target's view keeps its box links on its own diagrams, which the
+        # lightbox opens in place, instead of the all-targets sections.
+        out = hooks._fix_standalone_svg(SVG, SVG_URL, DOC_URLS, PATHS, DIAGRAMS, in_view=True)
+        self.assertIn('href="skynode-fmu_nuttx.svg"', out)
+
     def test_unembedded_title_href_left_as_svg(self):
         # No section to link to -> leave the .svg so the lightbox opens it directly.
         self.assertIn('href="doodle_radio-radio_air.svg"', fix(SVG))

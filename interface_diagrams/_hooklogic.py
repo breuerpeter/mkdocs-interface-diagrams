@@ -299,7 +299,9 @@ def _read_svg(docs_dir: str, relpath: str):
 _FILES = None
 
 
-def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, diagrams: dict, section: str = "") -> str:
+def _fix_standalone_svg(
+    svg: str, svg_url: str, doc_urls: dict, paths: dict, diagrams: dict, section: str = "", in_view: bool = False
+) -> str:
     """Rewrite a raw diagram SVG's links so they work when the .svg is opened
     directly (the "Open diagram" target), not just when inlined — all relative to
     the SVG's own served location (`svg_url`):
@@ -311,7 +313,8 @@ def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, dia
         opens it like an interface link. A title whose diagram isn't placed
         anywhere (e.g. a cross-referenced subsystem not in the data-flows folder)
         has no section, so it's left as the .svg and the lightbox opens it
-        directly."""
+        directly. In a target's view (`in_view`) every title stays its .svg, so
+        the lightbox opens the target's own diagram of that box in place."""
 
     def _section_url(loc):
         doc, anchor = loc
@@ -337,7 +340,8 @@ def _fix_standalone_svg(svg: str, svg_url: str, doc_urls: dict, paths: dict, dia
         return f'{attr}="{u}"' if u else hm.group(0)
 
     svg = _SVG_DOC_HREF.sub(iface, svg)
-    svg = _SVG_HREF.sub(title, svg)
+    if not in_view:
+        svg = _SVG_HREF.sub(title, svg)
     return svg
 
 
@@ -358,7 +362,9 @@ def fix_built_svgs(config):
         svg = open(dest, encoding="utf-8").read()
         parts = f.src_path.replace(os.sep, "/").split("/")
         sec = parts[2] if parts[:2] == ["assets", "diagrams"] and len(parts) > 3 else ""
-        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, _diagrams, sec)
+        # assets/diagrams/<section>/<target>/<stem>.svg is a diagram of a target's view.
+        in_view = parts[:2] == ["assets", "diagrams"] and len(parts) == 5
+        fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, _diagrams, sec, in_view)
         if fixed != svg:
             with open(dest, "w", encoding="utf-8") as fh:
                 fh.write(fixed)
