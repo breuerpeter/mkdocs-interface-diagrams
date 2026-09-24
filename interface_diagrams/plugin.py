@@ -57,8 +57,8 @@ class DiagramsPlugin(BasePlugin):
             key = cache.job_key(section, extra)
             if self.config["cache"] and cache.is_fresh(out_dir, key):
                 continue
-            # 1: the docs have an error that stops the build (a target tag entry
-            # that matches no declared target), printed above.
+            # 1: the docs have an error that stops the build (a bad target
+            # declaration, or a tag entry no declared target matches), printed above.
             if generate_section(section, out_dir, check=False) == 1:
                 raise PluginError(f"interface-diagrams: {section} has errors, listed above")
             cache.write(out_dir, key)

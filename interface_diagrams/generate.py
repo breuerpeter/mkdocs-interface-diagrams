@@ -27,6 +27,7 @@ import itertools
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -255,11 +256,16 @@ def planned_stems(doc_paths: list[Path]) -> set[str]:
     return stems
 
 
+# A declared target names its own folder under --out, so it must be a plain
+# folder name: letters, digits, '.', '_' and '-', starting with a letter or digit.
+TARGET_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
 def generate_section(section: Path, out: Path, check: bool = False) -> int:
     """Generate (or, with check=True, only validate) one system folder. Returns
     the exit code: 0 done; 1 the docs have errors (with check=True any
-    validation issue; when generating, a target tag entry that matches no
-    declared target, which stops the build); 2 a setup error."""
+    validation issue; when generating, a bad target declaration or a tag entry
+    that matches no declared target, which stops the build); 2 a setup error."""
     import interface_diagrams.edges as _edges_mod
     _edges_mod._VALIDATION_WARNINGS = 0
     _edges_mod._VALIDATION_SOFT_WARNINGS = 0
@@ -282,17 +288,23 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
     full, flows, parsed_docs, unresolved = parse_closure(doc_paths)
     all_subs = sorted({d.subsystem for d in full.devices})
     targets = manifest.landing_targets(overview)
-    tag_errors = unmatched_tags(flows, targets)
-    for f, entry in tag_errors:
-        print(
-            f"error: flow '{_flow_name(f)}' on '{_fmt_key(f.source)}': tag entry `{entry}` matches no "
-            f"target that {overview} declares ({', '.join(targets) or 'none'})",
-            file=sys.stderr,
-        )
+    errors = [
+        f"{overview}: target `{t}` is not a plain folder name "
+        "(letters, digits, '.', '_' and '-', starting with a letter or digit)"
+        for t in targets
+        if not TARGET_NAME.fullmatch(t)
+    ]
+    errors += [
+        f"flow '{_flow_name(f)}' on '{_fmt_key(f.source)}': tag entry `{entry}` matches no "
+        f"target that {overview} declares ({', '.join(targets) or 'none'})"
+        for f, entry in unmatched_tags(flows, targets)
+    ]
+    for e in errors:
+        print(f"error: {e}", file=sys.stderr)
 
     if check:
         derive_edges(flows, full)
-        issues = _edges_mod._VALIDATION_WARNINGS + len(tag_errors)
+        issues = _edges_mod._VALIDATION_WARNINGS + len(errors)
         if issues:
             print(f"check failed: {issues} issue(s) across {len(parsed_docs)} parsed doc(s)", file=sys.stderr)
             return 1
@@ -303,7 +315,7 @@ def generate_section(section: Path, out: Path, check: bool = False) -> int:
         )
         print(f"check passed: {len(parsed_docs)} doc(s), {len(flows)} flows{advisory}", file=sys.stderr)
         return 0
-    if tag_errors:
+    if errors:
         return 1
 
     # Newton fork: a single STABLE output folder (not dated) so re-rendering is
