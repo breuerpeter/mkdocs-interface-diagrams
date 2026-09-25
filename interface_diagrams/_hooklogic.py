@@ -546,7 +546,13 @@ def apply_page_markdown(markdown, page, config, files):
             sec = sec or section
             if name not in manifest.landing_targets(Path(docs_dir, sec, "index.md")):
                 raise PluginError(f"{here}: [[target:{token}]] names no target that the section's index.md declares")
-            return diagram_link(f"{name}/{_system_slug(docs_dir, sec)}", alias or name, sec)
+            # A folder that declares no system, or that the plugin excludes, gets
+            # no diagrams, so its view does not exist.
+            stem = f"{name}/{_system_slug(docs_dir, sec)}"
+            if not svg_url(stem, sec):
+                raise PluginError(f"{here}: [[target:{token}]] names a target whose view was not rendered: "
+                                  "its folder declares no system, or is excluded")
+            return diagram_link(stem, alias or name, sec)
         docpart, _, path = target.partition("#")
         docpart, path = docpart.strip(), _norm_path(path)
         doc = _doc_path(docpart, section) if docpart else here

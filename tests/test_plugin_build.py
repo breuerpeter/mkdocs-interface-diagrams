@@ -226,6 +226,32 @@ def test_a_section_qualified_target_token_whose_folder_is_no_section_fails_the_b
     assert (failed, "reference/list.md" in output and "nosuch/x_1" in output) == (True, True)
 
 
+def test_a_section_qualified_target_token_whose_folder_declares_no_system_fails_the_build(tmp_path):
+    """A folder whose index.md declares targets but no system is no section: its
+    qualified token fails the build and names the page."""
+    site = site_copy(tmp_path, TAGGED)
+    (site / "docs" / "reference").mkdir()
+    (site / "docs" / "reference" / "index.md").write_text("---\ntargets: [x_1]\n---\n# Reference\n", encoding="utf-8")
+    (site / "docs" / "reference" / "list.md").write_text("# Targets\n\n[[target:reference/x_1]]\n", encoding="utf-8")
+    built = build(site, tmp_path / "site")
+    output = built.stdout + built.stderr
+    assert (built.returncode != 0, "reference/list.md" in output and "reference/x_1" in output) == (True, True)
+
+
+def test_a_section_qualified_target_token_for_an_excluded_section_fails_the_build(tmp_path):
+    """A section the plugin's `exclude` option names is no section: its qualified
+    token fails the build and names the page."""
+    site = site_copy(tmp_path, TAGGED)
+    shutil.copytree(site / "docs" / "parity", site / "docs" / "other")
+    (site / "docs" / "other" / "index.md").write_text(OTHER_INDEX, encoding="utf-8")
+    (site / "mkdocs.yml").write_text(
+        "site_name: Test\ndocs_dir: docs\nplugins:\n  - interface-diagrams:\n      exclude: [other]\n", encoding="utf-8")
+    write_list_page(site, "# Targets\n\n[[target:other/x_1]]\n")
+    built = build(site, tmp_path / "site")
+    output = built.stdout + built.stderr
+    assert (built.returncode != 0, "reference/list.md" in output and "other/x_1" in output) == (True, True)
+
+
 def test_a_dangling_waypoint_still_drops_its_flow_and_passes_the_build(tmp_path):
     """Any other flow error, such as a dangling waypoint, still drops the flow and passes `mkdocs build`."""
     site = site_copy(tmp_path, [

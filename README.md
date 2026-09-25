@@ -116,7 +116,7 @@ Each target gets its own set of diagrams, drawn from its flows alone, in `<out_r
 | `[[target:<name>]]` | the view of `<name>` in the page's own section |
 | `[[target:<section>/<name>\|<text>]]` | the same, with `<text>` as the link text |
 
-A token for a target that its section does not declare stops the build and names the page.
+A token stops the build and names the page when its section does not declare the target, or when the folder it names has no rendered view: the folder declares no `system:`, or `exclude` names it.
 
 ## The lightbox
 
