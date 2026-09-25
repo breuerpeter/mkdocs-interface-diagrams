@@ -11,7 +11,10 @@
 //    (no instant nav), so the intent is stashed and replayed on the next load.
 //  * A target's view lives only in the overlay: its box and port links open the
 //    target's own diagrams, and closing the overlay lands the page on the
-//    all-targets section of the last diagram shown.
+//    all-targets section of the last diagram shown, unless that is still the
+//    diagram a link on the page opened.
+//  * "Back to system diagram" opens the system diagram of the section the shown
+//    diagram belongs to, which may not be the page's own.
 (function () {
   var INTENT = "diagram-autoopen"; // sessionStorage key: "<pathname>#<anchor>"
 
@@ -69,7 +72,7 @@
     bar.className = "diagram-toolbar";
     // A click on the toolbar's own gap/padding shouldn't close the overlay.
     bar.addEventListener("click", function (e) { e.stopPropagation(); });
-    var home = systemDiagramUrl();
+    var home = clone.getAttribute("data-system") || systemDiagramUrl();
     if (home)
       bar.appendChild(iconButton("Back to system diagram",
         "M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z",
@@ -105,7 +108,9 @@
     if (url.pathname !== location.pathname || url.hash) location.href = url.href;
   }
 
-  function openFromUrl(url) {
+  // `keepPage`: the diagram was opened from a link on the page, so closing on
+  // it keeps the page instead of landing on its all-targets section.
+  function openFromUrl(url, keepPage) {
     fetch(url)
       .then(function (r) { return r.text(); })
       .then(function (text) {
@@ -121,8 +126,11 @@
             if (v) a.setAttribute(attr, new URL(v, url).href);
           });
         });
-        var section = svg.getAttribute("data-section");
-        if (section) svg.setAttribute("data-section", new URL(section, url).href);
+        ["data-section", "data-system"].forEach(function (attr) {
+          var v = svg.getAttribute(attr);
+          if (v) svg.setAttribute(attr, new URL(v, url).href);
+        });
+        if (keepPage) svg.removeAttribute("data-section");
         closeLightbox();
         openLightbox(svg, url.split("/").pop().split(/[?#]/)[0]);
       })
@@ -204,7 +212,7 @@
     if (document.querySelector(".diagram-lightbox")) { dismissLightbox(); return; }
     // 3. A diagram title in the prose (a heading / flow-label link) → open it.
     var openLink = e.target.closest("a.diagram-link");
-    if (openLink) { e.preventDefault(); openFromUrl(openLink.href); return; }
+    if (openLink) { e.preventDefault(); openFromUrl(openLink.href, true); return; }
     // 4. Click an inlined diagram (not a link) to expand it.
     if (e.target.closest("a")) return;
     var dia = e.target.closest(".interface-diagram");

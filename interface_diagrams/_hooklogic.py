@@ -13,13 +13,15 @@ plus that filename convention, where every diagram belongs. Then per page it:
     that opens it in the lightbox — collapsing the title onto the link — and
     rewrites each interface (port) label's href to its interface heading;
   * turns each `[[...]]` flow waypoint into a link to the referenced
-    interface's heading, and each `[[target:<name>]]` into the lightbox link
-    that opens that target's view at its system diagram.
+    interface's heading, and each `[[target:<section>/<name>]]` into the
+    lightbox link that opens that target's view at its system diagram, from
+    any page. The bare `[[target:<name>]]` names the page's own section.
 
 A target's view (assets/diagrams/<section>/<target>/) is reached only in the
 lightbox: its box and port links open the target's own diagrams, and each
 diagram carries the all-targets section it belongs to, where closing the
-lightbox lands.
+lightbox lands. Every diagram also carries its section's system diagram, which
+the lightbox's "Back to system diagram" opens.
 
 The placement derivation here is the mirror of the tool's diagram naming
 (generate.py builds the same slugs from its parsed model); test_derivation.py
@@ -122,17 +124,15 @@ def _section_of(doc: str) -> str:
     return head if "/" in doc else ""
 
 
-def _svg_rel(doc: str, stem: str) -> str:
-    """Docs-relative path of a diagram SVG for the given doc's section."""
-    return f"assets/diagrams/{_section_of(doc)}/{stem}.svg"
+def _svg_rel(section: str, stem: str) -> str:
+    """Docs-relative path of a diagram SVG in the given section."""
+    return f"assets/diagrams/{section}/{stem}.svg"
 
 
-def _system_slug(docs_dir: str, doc: str):
-    """System-overview diagram slug for a doc's section, from the section's
-    index.md `system:` frontmatter — or None if the section declares no system."""
-    section = _section_of(doc)
-    idx = Path(docs_dir, section, "index.md") if section else Path(docs_dir, "index.md")
-    name = manifest.landing_system_name(idx)
+def _system_slug(docs_dir: str, section: str):
+    """System-overview diagram slug for a section, from its index.md `system:`
+    frontmatter — or None if the section declares no system."""
+    name = manifest.landing_system_name(Path(docs_dir, section, "index.md"))
     return qualified_name(name) if name else None
 
 
@@ -274,10 +274,10 @@ def _scan(docs_dir: str):
             # heading, so record it explicitly and remember its path so pages can
             # link "home" to it (diagram-lightbox.js).
             if doc_stem == _LANDING_STEM:
-                sys_slug = _system_slug(docs_dir, doc)
+                sys_slug = _system_slug(docs_dir, _section_of(doc))
                 if sys_slug and sys_slug in stems:
                     _DIAGRAMS.setdefault((_section_of(doc), sys_slug), (doc, None))
-                    _SYSTEM_SVG[_section_of(doc)] = _svg_rel(doc, sys_slug)
+                    _SYSTEM_SVG[_section_of(doc)] = _svg_rel(_section_of(doc), sys_slug)
     # Every rendered SVG must have been placed by the derivation above; one that
     # wasn't means its filename no longer matches any heading/flow-label — i.e.
     # the generator's naming and this hook's derivation have drifted. Fail the
@@ -402,6 +402,12 @@ def fix_built_svgs(config):
         # assets/diagrams/<section>/<target>/<stem>.svg is a diagram of a target's view.
         in_view = parts[:2] == ["assets", "diagrams"] and len(parts) == 5
         fixed = _fix_standalone_svg(svg, f.url, doc_urls, paths, view_sections if in_view else _diagrams, sec, in_view)
+        # Each diagram carries its section's system diagram, which the
+        # lightbox's "Back to system diagram" opens from any page.
+        home = _FILES.get_file_from_path(_SYSTEM_SVG[sec]) if sec in _SYSTEM_SVG else None
+        if home:
+            u = html.escape(_get_relative_url(home.url, f.url), quote=True)
+            fixed = fixed.replace("<svg", f'<svg data-system="{u}"', 1)
         if fixed != svg:
             with open(dest, "w", encoding="utf-8") as fh:
                 fh.write(fixed)
@@ -413,7 +419,7 @@ def apply_page_markdown(markdown, page, config, files):
     docs_dir = config["docs_dir"]
     diagrams, paths = _scan(docs_dir)
     here = page.file.src_path.replace(os.sep, "/")
-    os.path.dirname(here)
+    section = _section_of(here)
     here_stem = os.path.splitext(os.path.basename(here))[0]
     stems = _section_stems(docs_dir, here)
 
@@ -424,14 +430,14 @@ def apply_page_markdown(markdown, page, config, files):
         u = _get_relative_url(f.url, page.file.url)
         return u + (f"#{anchor}" if anchor else "")
 
-    def svg_url(stem):
-        f = files.get_file_from_path(_svg_rel(here, stem))
+    def svg_url(stem, sec=section):
+        f = files.get_file_from_path(_svg_rel(sec, stem))
         return _get_relative_url(f.url, page.file.url) if f else None
 
-    def diagram_link(stem, inner):
+    def diagram_link(stem, inner, sec=section):
         """Wrap a title (heading text or `**flow label**`) in the lightbox link
-        that opens its diagram."""
-        u = svg_url(stem)
+        that opens its diagram in section `sec`, by default the page's own."""
+        u = svg_url(stem, sec)
         if not u:
             return inner
         return f'<a class="diagram-link" href="{u}" target="_blank" rel="noopener" title="Open diagram">{inner}</a>'
@@ -439,7 +445,7 @@ def apply_page_markdown(markdown, page, config, files):
     def inline_system():
         """The system overview SVG, inlined with its internal links rewritten to
         the sections/headings they target (the only inlined diagram)."""
-        rel = _svg_rel(here, _system_slug(docs_dir, here))
+        rel = _svg_rel(section, _system_slug(docs_dir, section))
         svg = _read_svg(docs_dir, rel)
         if svg is None:
             return f"\n\n*missing diagram: {rel}*\n\n"
@@ -448,7 +454,7 @@ def apply_page_markdown(markdown, page, config, files):
         def fix_href(hm):
             attr, name = hm.group(1), hm.group(2)
             hstem = name[:-4]
-            loc = diagrams.get((_section_of(here), hstem))
+            loc = diagrams.get((section, hstem))
             # A placed title -> its heading anchor; a payload-token target (flow
             # or aggregate, anchor None) falls through to its .svg asset so the
             # lightbox opens it in place without navigating.
@@ -456,7 +462,7 @@ def apply_page_markdown(markdown, page, config, files):
                 u = url_to(*loc)
                 if u:
                     return f'{attr}="{u}"'
-            u = url_to(_doc_path(hstem, _section_of(here)))
+            u = url_to(_doc_path(hstem, section))
             if u:
                 return f'{attr}="{u}"'
             f2 = files.get_file_from_path(os.path.join(folder, name))
@@ -467,7 +473,7 @@ def apply_page_markdown(markdown, page, config, files):
         def fix_iface_href(hm):
             attr, doc, path = (
                 hm.group(1),
-                _doc_path(hm.group(2), _section_of(here)),
+                _doc_path(hm.group(2), section),
                 _norm_path(html.unescape(hm.group(3))),
             )
             anchor = paths.get((doc, path))
@@ -489,7 +495,7 @@ def apply_page_markdown(markdown, page, config, files):
         if rec[0] == "heading":
             _, idx, level, text, _disp, slug, _paths = rec
             if is_landing and level == 1:
-                _sys = _system_slug(docs_dir, here)
+                _sys = _system_slug(docs_dir, section)
                 if _sys and _sys in stems:
                     inline_after = idx
                 continue  # landing H1 stays plain; system diagram inlined below it
@@ -532,15 +538,24 @@ def apply_page_markdown(markdown, page, config, files):
         target = m.group(1).split("|", 1)[0]
         alias = m.group(1).split("|", 1)[1] if "|" in m.group(1) else None
         if target.startswith("target:"):
-            # `[[target:<name>]]` opens that target's view in the lightbox, at
-            # its system diagram (assets/diagrams/<section>/<name>/).
-            name = target[len("target:"):].strip()
-            if name not in manifest.landing_targets(Path(docs_dir, _section_of(here), "index.md")):
-                raise PluginError(f"{here}: [[target:{name}]] names no target that the section's index.md declares")
-            return diagram_link(f"{name}/{_system_slug(docs_dir, here)}", alias or name)
+            # `[[target:<section>/<name>]]` opens that target's view in the
+            # lightbox, at its system diagram (assets/diagrams/<section>/<name>/).
+            # The bare `[[target:<name>]]` names the page's own section.
+            token = target[len("target:"):].strip()
+            sec, _, name = token.rpartition("/")
+            sec = sec or section
+            if name not in manifest.landing_targets(Path(docs_dir, sec, "index.md")):
+                raise PluginError(f"{here}: [[target:{token}]] names no target that the section's index.md declares")
+            # A folder that declares no system, or that the plugin excludes, gets
+            # no diagrams, so its view does not exist.
+            stem = f"{name}/{_system_slug(docs_dir, sec)}"
+            if not svg_url(stem, sec):
+                raise PluginError(f"{here}: [[target:{token}]] names a target whose view was not rendered: "
+                                  "its folder declares no system, or is excluded")
+            return diagram_link(stem, alias or name, sec)
         docpart, _, path = target.partition("#")
         docpart, path = docpart.strip(), _norm_path(path)
-        doc = _doc_path(docpart, _section_of(here)) if docpart else here
+        doc = _doc_path(docpart, section) if docpart else here
         # Show the subsystem in the waypoint label: the referenced doc's H1 title
         # (the cross-doc waypoint's subsystem) or the current page's (same-doc).
         # Fall back to the file stem when a doc has no recorded H1.
@@ -556,7 +571,7 @@ def apply_page_markdown(markdown, page, config, files):
 
     # Expose a page-relative URL to the system diagram so the lightbox's "home"
     # button can jump back to it from any page (see diagram-lightbox.js).
-    home_svg = _SYSTEM_SVG.get(_section_of(here))
+    home_svg = _SYSTEM_SVG.get(section)
     if home_svg:
         sf = files.get_file_from_path(home_svg)
         if sf:
