@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/breuerpeter/mkdocs-interface-diagrams/compare/v0.1.0...v0.2.0) (2026-09-25)
+
+
+### Features
+
+* **targets:** give each target its own diagram view from flow tags ([#7](https://github.com/breuerpeter/mkdocs-interface-diagrams/issues/7)) ([a77f11f](https://github.com/breuerpeter/mkdocs-interface-diagrams/commit/a77f11fc6a79902db53a0fd8f67e92e5e37760a4)), closes [#5](https://github.com/breuerpeter/mkdocs-interface-diagrams/issues/5)
+* **targets:** name a target's section so any page opens its view ([#12](https://github.com/breuerpeter/mkdocs-interface-diagrams/issues/12)) ([61dfb63](https://github.com/breuerpeter/mkdocs-interface-diagrams/commit/61dfb63630db37b2a08691e019cc4469a07a0864)), closes [#11](https://github.com/breuerpeter/mkdocs-interface-diagrams/issues/11)
+
 ## 0.1.0 (2026-06-23)
 
 
